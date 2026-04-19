@@ -245,7 +245,8 @@ impl SchemeHandle {
     /// `#[tokio::main(flavor = "current_thread")]` annotation in
     /// `main.rs`), which polls spawned tasks in FIFO order from the
     /// ready queue.  Since rmcp dispatches each MCP request via
-    /// `tokio::spawn` (rmcp-0.8.5/src/service.rs:763), the spawn
+    /// `tokio::spawn` (see `crates/rmcp/src/service.rs` in the rmcp
+    /// repository — the per-request dispatch site), the spawn
     /// order matches the request arrival order on stdin, and the FIFO
     /// polling order carries that through to `tx.send()` — the worker
     /// thread processes requests in the order they arrived on the

@@ -13,8 +13,8 @@ use framewalk_mi_transport::TransportHandle;
 use rmcp::{
     handler::server::router::tool::ToolRouter,
     model::{
-        CallToolResult, Implementation, ListResourcesResult, PaginatedRequestParam,
-        ProtocolVersion, ReadResourceRequestParam, ReadResourceResult, ServerCapabilities,
+        CallToolResult, Implementation, ListResourcesResult, PaginatedRequestParams,
+        ProtocolVersion, ReadResourceRequestParams, ReadResourceResult, ServerCapabilities,
         ServerInfo,
     },
     service::{RequestContext, RoleServer},
@@ -150,7 +150,7 @@ impl FramewalkMcp {
     }
 }
 
-#[tool_handler]
+#[tool_handler(router = self.tool_router)]
 impl ServerHandler for FramewalkMcp {
     fn get_info(&self) -> ServerInfo {
         let instructions = match self.mode {
@@ -190,26 +190,23 @@ impl ServerHandler for FramewalkMcp {
                 .to_string(),
         };
 
-        ServerInfo {
-            protocol_version: ProtocolVersion::V_2025_06_18,
-            capabilities: ServerCapabilities::builder()
+        ServerInfo::new(
+            ServerCapabilities::builder()
                 .enable_tools()
                 .enable_resources()
                 .build(),
-            server_info: Implementation {
-                name: "framewalk-mcp".to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                title: Some("framewalk — GDB/MI MCP server".to_string()),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(instructions),
-        }
+        )
+        .with_protocol_version(ProtocolVersion::V_2025_11_25)
+        .with_server_info(
+            Implementation::new("framewalk-mcp", env!("CARGO_PKG_VERSION"))
+                .with_title("framewalk — GDB/MI MCP server"),
+        )
+        .with_instructions(instructions)
     }
 
     async fn list_resources(
         &self,
-        _params: Option<PaginatedRequestParam>,
+        _params: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListResourcesResult, McpError> {
         Ok(resources::list_resources())
@@ -217,7 +214,7 @@ impl ServerHandler for FramewalkMcp {
 
     async fn read_resource(
         &self,
-        request: ReadResourceRequestParam,
+        request: ReadResourceRequestParams,
         _context: RequestContext<RoleServer>,
     ) -> Result<ReadResourceResult, McpError> {
         resources::read_resource(&request.uri)

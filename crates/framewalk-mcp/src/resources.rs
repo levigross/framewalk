@@ -353,14 +353,14 @@ pub(crate) fn read_resource(uri: &str) -> Result<ReadResourceResult, McpError> {
         .find(|e| e.uri == uri)
         .ok_or_else(|| McpError::invalid_params(format!("unknown resource uri: {uri}"), None))?;
     let text = entry.content.render();
-    Ok(ReadResourceResult {
-        contents: vec![ResourceContents::TextResourceContents {
+    Ok(ReadResourceResult::new(vec![
+        ResourceContents::TextResourceContents {
             uri: entry.uri.to_string(),
             mime_type: Some(MIME.to_string()),
             text: text.into_owned(),
             meta: None,
-        }],
-    })
+        },
+    ]))
 }
 
 #[cfg(test)]
