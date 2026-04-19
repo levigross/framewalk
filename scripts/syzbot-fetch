@@ -1,0 +1,210 @@
+#!/usr/bin/env bash
+# syzbot-fetch — Download syzbot bug artifacts for local reproduction.
+#
+# Downloads the C reproducer, kernel config, crash report, and metadata
+# for a syzbot bug into a local directory.
+#
+# Usage:
+#   syzbot-fetch <bug-id-or-url> [output-dir]
+#
+# Examples:
+#   syzbot-fetch 03393ff6c35fd2cc43de
+#   syzbot-fetch https://syzkaller.appspot.com/bug?extid=03393ff6c35fd2cc43de
+#   syzbot-fetch 03393ff6c35fd2cc43de ./bugs/my-bug
+#
+# Output structure:
+#   <output-dir>/
+#     metadata.json    — bug title, status, kernel commit, etc.
+#     repro.c          — C reproducer (if available)
+#     kernel.config    — kernel .config used when bug was found
+#     crash-report.txt — crash log/report
+#
+# The reproducer can be compiled with:
+#   gcc -static -pthread -o repro repro.c
+
+set -euo pipefail
+
+SYZBOT_BASE="https://syzkaller.appspot.com"
+
+die() { echo "error: $*" >&2; exit 1; }
+
+# ── Parse arguments ─────────────────────────────────────────────────
+
+if [[ $# -lt 1 ]]; then
+    echo "Usage: syzbot-fetch <bug-id-or-url> [output-dir]"
+    echo ""
+    echo "  bug-id-or-url   syzbot extid or full bug URL"
+    echo "  output-dir      where to save artifacts (default: bugs/<extid>)"
+    exit 1
+fi
+
+INPUT="$1"
+
+# Extract extid from URL or use directly.
+if [[ "$INPUT" =~ extid=([a-f0-9]+) ]]; then
+    EXTID="${BASH_REMATCH[1]}"
+elif [[ "$INPUT" =~ ^[a-f0-9]+$ ]]; then
+    EXTID="$INPUT"
+else
+    die "Cannot parse bug ID from: $INPUT"
+fi
+
+OUTDIR="${2:-bugs/$EXTID}"
+
+echo "syzbot-fetch: bug extid=$EXTID"
+echo "  output: $OUTDIR"
+echo ""
+
+mkdir -p "$OUTDIR"
+
+# ── Fetch bug metadata (JSON API) ──────────────────────────────────
+
+BUG_URL="$SYZBOT_BASE/bug?extid=$EXTID&json=1"
+echo "Fetching bug metadata..."
+
+if ! META=$(curl -sfL "$BUG_URL"); then
+    die "Failed to fetch $BUG_URL — check the bug ID."
+fi
+
+# Validate we got JSON back
+if ! echo "$META" | jq -e '.title' >/dev/null 2>&1; then
+    die "Invalid response from syzbot (not JSON). Check bug ID: $EXTID"
+fi
+
+TITLE=$(echo "$META" | jq -r '.title // "unknown"')
+STATUS=$(echo "$META" | jq -r '.status // "unknown"')
+NUM_CRASHES=$(echo "$META" | jq -r '.crashes | length')
+
+echo "  title:   $TITLE"
+echo "  status:  $STATUS"
+echo "  crashes: $NUM_CRASHES"
+echo ""
+
+# Save full metadata
+echo "$META" | jq '.' > "$OUTDIR/metadata.json"
+
+# ── Find the best crash with a C reproducer ─────────────────────────
+
+# Pick the first crash that has a C reproducer
+C_REPRO_URL=$(echo "$META" | jq -r '
+    [.crashes[] | select(."c-reproducer" != null and ."c-reproducer" != "")]
+    | first
+    | ."c-reproducer" // empty
+')
+
+KERNEL_CONFIG_URL=$(echo "$META" | jq -r '
+    [.crashes[] | select(."kernel-config" != null)]
+    | first
+    | ."kernel-config" // empty
+')
+
+CRASH_REPORT_URL=$(echo "$META" | jq -r '
+    [.crashes[] | select(."crash-report-link" != null)]
+    | first
+    | ."crash-report-link" // empty
+')
+
+KERNEL_COMMIT=$(echo "$META" | jq -r '
+    [.crashes[] | select(."c-reproducer" != null)]
+    | first
+    | ."kernel-source-commit" // empty
+')
+
+KERNEL_GIT=$(echo "$META" | jq -r '
+    [.crashes[] | select(."c-reproducer" != null)]
+    | first
+    | ."kernel-source-git" // empty
+')
+
+COMPILER=$(echo "$META" | jq -r '
+    [.crashes[] | select(."c-reproducer" != null)]
+    | first
+    | .compiler // empty
+')
+
+# Save a summary
+cat > "$OUTDIR/info.txt" <<EOF
+Bug: $TITLE
+Status: $STATUS
+ExtID: $EXTID
+URL: $SYZBOT_BASE/bug?extid=$EXTID
+
+Kernel commit: ${KERNEL_COMMIT:-unknown}
+Kernel git:    ${KERNEL_GIT:-unknown}
+Compiler:      ${COMPILER:-unknown}
+EOF
+
+# ── Download artifacts ──────────────────────────────────────────────
+
+resolve_url() {
+    local url="$1"
+    # Relative paths from syzbot API need the base URL prepended
+    if [[ "$url" == /* ]]; then
+        echo "${SYZBOT_BASE}${url}"
+    else
+        echo "$url"
+    fi
+}
+
+download() {
+    local url="$1" dest="$2" label="$3"
+    if [[ -z "$url" ]]; then
+        echo "  [$label] not available"
+        return 1
+    fi
+    url=$(resolve_url "$url")
+    echo "  [$label] downloading..."
+    if curl -sfL -o "$dest" "$url"; then
+        local size
+        size=$(wc -c < "$dest")
+        echo "  [$label] saved ($size bytes)"
+        return 0
+    else
+        echo "  [$label] download failed (url: $url)"
+        return 1
+    fi
+}
+
+echo "Downloading artifacts:"
+HAS_REPRO=false
+download "$C_REPRO_URL" "$OUTDIR/repro.c" "C reproducer" && HAS_REPRO=true
+download "$KERNEL_CONFIG_URL" "$OUTDIR/kernel.config" "kernel config"
+download "$CRASH_REPORT_URL" "$OUTDIR/crash-report.txt" "crash report"
+
+echo ""
+
+# ── Compile the reproducer if available ─────────────────────────────
+
+if $HAS_REPRO; then
+    echo "Compiling reproducer..."
+    # Try static linking first (needed for initramfs VM), then dynamic fallback.
+    # musl-gcc produces truly static binaries; glibc -static needs glibc.static.
+    if command -v musl-gcc >/dev/null 2>&1 && \
+       musl-gcc -static -pthread -w -o "$OUTDIR/repro" "$OUTDIR/repro.c" 2>/dev/null; then
+        echo "  compiled (static/musl): $OUTDIR/repro"
+    elif gcc -static -pthread -w -o "$OUTDIR/repro" "$OUTDIR/repro.c" 2>/dev/null; then
+        echo "  compiled (static/glibc): $OUTDIR/repro"
+    elif gcc -pthread -w -o "$OUTDIR/repro" "$OUTDIR/repro.c" 2>/dev/null; then
+        echo "  compiled (dynamic): $OUTDIR/repro"
+        echo "  note: dynamic binary — needs shared libs in VM, or recompile with musl-gcc"
+    else
+        echo "  compilation failed (may need specific headers or 32-bit support)"
+    fi
+fi
+
+echo ""
+echo "Done. Artifacts saved to: $OUTDIR/"
+echo ""
+if $HAS_REPRO; then
+    echo "To debug with framewalk kernel-debug-vm:"
+    echo "  1. Build VM:    nix build .#kernel-debug-vm"
+    echo "  2. Start VM:    ./result/bin/kernel-debug-vm --share $OUTDIR"
+    echo "  3. In VM:       /shared/repro    (triggers the kernel crash)"
+    echo "  4. Framewalk:   (mi \"-target-select remote localhost:1234\")"
+    echo ""
+    echo "Or without --share (boot immediately, copy repro in later):"
+    echo "  ./result/bin/kernel-debug-vm --no-pause"
+else
+    echo "No C reproducer available for this bug."
+    echo "Check if a syz reproducer exists at: $SYZBOT_BASE/bug?extid=$EXTID"
+fi

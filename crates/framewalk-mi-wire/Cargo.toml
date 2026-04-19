@@ -1,0 +1,17 @@
+[package]
+name = "framewalk-mi-wire"
+description = "Clean-room byte-level framer for the GDB/MI v3 protocol (no_std + alloc, zero deps)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+proptest.workspace = true

@@ -1,0 +1,23 @@
+[package]
+name = "framewalk-mi-protocol"
+description = "Sans-IO state machine for driving GDB over the MI v3 protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+framewalk-mi-wire = { path = "../framewalk-mi-wire" }
+framewalk-mi-codec = { path = "../framewalk-mi-codec" }
+tracing.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+schemars.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

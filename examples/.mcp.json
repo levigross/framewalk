@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "framewalk": {
+      "command": "framewalk-mcp",
+      "args": [],
+      "env": {}
+    },
+    "framewalk-scheme": {
+      "command": "framewalk-mcp",
+      "args": ["--mode", "scheme"],
+      "env": {}
+    }
+  }
+}

@@ -1,0 +1,112 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/framewalk-mi-wire",
+    "crates/framewalk-mi-codec",
+    "crates/framewalk-mi-protocol",
+    "crates/framewalk-mi-transport",
+    "crates/framewalk-mcp",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+repository = "https://github.com/levigross/framewalk"
+authors = ["Levi Gross <levi@levigross.com>"]
+
+# Crane reads this when the workspace root has no [package] section, which is
+# our case (virtual workspace). Silences the warning and makes derivations
+# carry a meaningful name.
+[workspace.metadata.crane]
+name = "framewalk"
+
+# Workspace-level lint policy. Individual crates inherit via `[lints] workspace = true`.
+# Clean-room discipline: no unsafe in wire/codec/protocol; the transport crate may
+# need std::process shenanigans but should still justify every unsafe block.
+[workspace.lints.rust]
+unsafe_code = "deny"
+unreachable_pub = "warn"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Noise suppressions — these pedantic lints fire on ergonomic code we actually want.
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
+
+# Shared dependencies declared here and inherited per-crate via `foo.workspace = true`.
+# Runtime deps are introduced per-crate as each build step activates them; dev-deps
+# (used only by test targets) are allowed freely since they do not appear in
+# downstream consumers' dependency trees.
+[workspace.dependencies]
+# --- Runtime deps (protocol layer and above) ---
+# tracing: structured diagnostics for the protocol state machine and transport.
+# Zero overhead when no subscriber is installed; widely adopted across the Rust
+# ecosystem so it's the right shared instrumentation choice.
+tracing = "0.1"
+# thiserror: declarative error enums. Used in mi-protocol, mi-transport, and
+# the MCP server. NOT used in mi-wire or mi-codec — those crates hand-write
+# their errors to preserve the zero-runtime-dep contract.
+thiserror = "2"
+# tokio: async runtime for the transport and MCP server crates. Feature-gated
+# to exactly what framewalk uses so musl-static builds stay lean: `process`
+# for tokio::process::Command, `io-util` for AsyncRead/Write extensions,
+# `sync` for broadcast/mpsc/oneshot, `rt-multi-thread` for the test runtime,
+# `macros` for #[tokio::test] / #[tokio::main].
+tokio = { version = "1", features = [
+    "process",
+    "io-util",
+    "sync",
+    "rt",
+    "rt-multi-thread",
+    "macros",
+    "time",
+] }
+
+# --- framewalk-mcp deps ---
+# rmcp: official Rust MCP SDK. Feature-gated to stdio-only (server, macros,
+# schemars) so we avoid pulling in the SSE/HTTP/WebSocket transports — which
+# would drag in hyper/rustls/crypto stacks and blow up the static-musl build.
+rmcp = { version = "0.8", features = ["server", "transport-io", "macros"] }
+# serde + serde_json + schemars: tool input schemas. rmcp re-exports these
+# but pinning them here keeps the dep graph visible.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+schemars = "1"
+# Interactive binary concerns (CLI args, logging, anyhow error glue).
+clap = { version = "4", features = ["derive", "env"] }
+anyhow = "1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# steel: embeddable R5RS Scheme interpreter. Used in the MCP server to
+# let LLMs compose multi-step GDB workflows in a single tool call,
+# avoiding per-tool round-trip overhead and context-window bloat.
+steel-core = "0.8"
+
+# parking_lot: lighter Mutex without poisoning. Used by mi-transport where
+# critical sections are short, CPU-bound, and never hold across .await.
+parking_lot = "0.12"
+
+# --- Dev-deps (test-only) ---
+# proptest: property-based testing for the sans-IO core. Used as a dev-dep in
+# mi-wire and mi-codec to exercise arbitrary byte sequences with arbitrary
+# chunk splits, complementing hand-crafted golden tests. Does not affect the
+# zero-runtime-dep contract of those crates.
+proptest = "1"
+
+# Release profile tuned for the framewalk-mcp static binary: small, fast, deterministic.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+opt-level = 3
+
+# Dev profile: fast iteration, still useful line numbers.
+[profile.dev]
+opt-level = 0
+debug = "line-tables-only"

@@ -1,0 +1,11 @@
+=thread-group-added,id="i1"
+(gdb) 
+^error,msg="/bin/ls: No such file or directory."
+(gdb) 
+^error,msg="No symbol table is loaded.  Use the \"file\" command."
+(gdb) 
+^error,msg="No executable file specified.\nUse the \"file\" or \"exec-file\" command."
+(gdb) 
+^error,msg="The program is not being run."
+(gdb) 
+^exit

@@ -1,0 +1,40 @@
+[package]
+name = "framewalk-mcp"
+description = "MCP server binary exposing GDB/MI debugging as semantic tools and live resources for LLM agents"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "framewalk_mcp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "framewalk-mcp"
+path = "src/main.rs"
+
+[dependencies]
+framewalk-mi-wire = { path = "../framewalk-mi-wire" }
+framewalk-mi-codec = { path = "../framewalk-mi-codec" }
+framewalk-mi-protocol = { path = "../framewalk-mi-protocol" }
+framewalk-mi-transport = { path = "../framewalk-mi-transport" }
+
+rmcp.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+schemars.workspace = true
+tokio.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+thiserror.workspace = true
+steel-core.workspace = true
+
+[dev-dependencies]

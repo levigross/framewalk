@@ -1,0 +1,18 @@
+[package]
+name = "framewalk-mi-codec"
+description = "Clean-room parser and encoder for the GDB/MI v3 wire grammar (no_std + alloc, zero deps)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+framewalk-mi-wire = { path = "../framewalk-mi-wire" }
+
+[dev-dependencies]
+proptest.workspace = true

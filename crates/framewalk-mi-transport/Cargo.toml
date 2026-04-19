@@ -1,0 +1,26 @@
+[package]
+name = "framewalk-mi-transport"
+description = "Async tokio-based subprocess transport for GDB/MI — spawns gdb and pumps bytes through the framewalk sans-IO core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+framewalk-mi-wire = { path = "../framewalk-mi-wire" }
+framewalk-mi-codec = { path = "../framewalk-mi-codec" }
+framewalk-mi-protocol = { path = "../framewalk-mi-protocol" }
+tokio.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+parking_lot.workspace = true
+
+[features]
+default = []
+
+[dev-dependencies]
