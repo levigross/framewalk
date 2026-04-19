@@ -1,6 +1,6 @@
 # framewalk
 
-[![PR Unit Tests](https://github.com/levigross/framewalk/actions/workflows/pr-unit-tests.yml/badge.svg)](https://github.com/levigross/framewalk/actions/workflows/pr-unit-tests.yml)
+[![PR Tests](https://github.com/levigross/framewalk/actions/workflows/pr-tests.yml/badge.svg)](https://github.com/levigross/framewalk/actions/workflows/pr-tests.yml)
 
 A clean-room Rust implementation of the GDB/MI v3 protocol, designed
 to give LLM agents native debugging capabilities over

@@ -51,7 +51,7 @@ nix develop -c cargo deny check                             # license + advisory
 
 `validate.sh` self-enters the nix shell via a sentinel env var; running it outside `nix develop` still works.
 
-CI (`.github/workflows/pr-unit-tests.yml`) runs `nix develop -c cargo test --workspace --locked` on PRs and pushes to `main`. The `--ignored` suites below are developer-local.
+CI (`.github/workflows/pr-tests.yml`) runs two jobs on PRs and pushes to `main`: `nix develop -c cargo test --workspace --locked` for fast unit feedback, and `scripts/validate.sh --locked` for the full gdb-backed integration suite. Both must pass before merge.
 
 ## Architecture invariants
 
