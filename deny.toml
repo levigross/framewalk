@@ -10,7 +10,12 @@ targets = [
 ]
 
 [advisories]
-ignore = []
+# bincode 1.x is "complete" per upstream (RUSTSEC-2025-0004) and pulled in
+# transitively via steel-core 0.8.2. No vulnerability, just an unmaintained
+# notice from a repo that considers its 1.x branch finished.
+ignore = [
+    { id = "RUSTSEC-2025-0141", reason = "bincode 1.x transitive dep of steel-core; unmaintained but not vulnerable" },
+]
 
 [licenses]
 # framewalk is Apache-2.0 licensed; deps must use compatible licenses.
