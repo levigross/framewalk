@@ -97,7 +97,7 @@ async fn drive_server_with_args(
 
 fn init_messages() -> Vec<String> {
     vec![
-        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}).to_string(),
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}).to_string(),
         json!({"jsonrpc":"2.0","method":"notifications/initialized"}).to_string(),
     ]
 }
