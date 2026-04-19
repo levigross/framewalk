@@ -41,7 +41,7 @@ run_session() {
     escaped="$(printf '%s' "$scheme_code" | jq -Rs .)"
 
     {
-        printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"try-scheme","version":"0"}}}\n'
+        printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"try-scheme","version":"0"}}}\n'
         printf '{"jsonrpc":"2.0","method":"notifications/initialized"}\n'
         printf '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"scheme_eval","arguments":{"code":%s}}}\n' "$escaped"
         sleep 4

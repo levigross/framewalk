@@ -163,7 +163,7 @@ fn find_reply(replies: &[serde_json::Value], id: i64) -> &serde_json::Value {
 #[ignore = "spawns real gdb via the mcp binary; run with --ignored"]
 async fn initialize_exposes_resources_capability() {
     let replies = drive_server(&[
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
         r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
     ])
     .await;
@@ -184,7 +184,7 @@ async fn initialize_exposes_resources_capability() {
 #[ignore = "spawns real gdb via the mcp binary; run with --ignored"]
 async fn resources_list_returns_thirty_three_markdown_items() {
     let replies = drive_server(&[
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
         r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
         r#"{"jsonrpc":"2.0","id":2,"method":"resources/list"}"#,
     ])
@@ -258,7 +258,7 @@ async fn resources_list_returns_thirty_three_markdown_items() {
 #[ignore = "spawns real gdb via the mcp binary; run with --ignored"]
 async fn read_resource_guide_getting_started_returns_docs_body() {
     let replies = drive_server(&[
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
         r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
         r#"{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"framewalk://guide/getting-started"}}"#,
     ])
@@ -293,7 +293,7 @@ async fn read_resource_guide_getting_started_returns_docs_body() {
 #[ignore = "spawns real gdb via the mcp binary; run with --ignored"]
 async fn read_resource_reference_breakpoints_non_empty() {
     let replies = drive_server(&[
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
         r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
         r#"{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"framewalk://reference/breakpoints"}}"#,
     ])
@@ -319,7 +319,7 @@ async fn read_resource_reference_breakpoints_non_empty() {
 #[ignore = "spawns real gdb via the mcp binary; run with --ignored"]
 async fn read_resource_recipe_debug_segfault_mentions_workflow() {
     let replies = drive_server(&[
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
         r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
         r#"{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"framewalk://recipe/debug-segfault"}}"#,
     ])
@@ -345,7 +345,7 @@ async fn read_resource_recipe_debug_segfault_mentions_workflow() {
 #[ignore = "spawns real gdb via the mcp binary; run with --ignored"]
 async fn read_resource_unknown_uri_returns_error() {
     let replies = drive_server(&[
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
         r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
         r#"{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"framewalk://nonsense"}}"#,
     ])
@@ -375,7 +375,7 @@ async fn read_resource_unknown_uri_returns_error() {
 async fn every_listed_resource_is_readable() {
     // First request: discover the URI set.
     let init = [
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#.to_string(),
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#.to_string(),
         r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#.to_string(),
         r#"{"jsonrpc":"2.0","id":2,"method":"resources/list"}"#.to_string(),
     ];
@@ -396,7 +396,7 @@ async fn every_listed_resource_is_readable() {
     // catch any regression in the read path that the in-process unit
     // tests would miss.
     let mut messages = vec![
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#.to_string(),
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#.to_string(),
         r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#.to_string(),
     ];
     for (idx, uri) in uris.iter().enumerate() {

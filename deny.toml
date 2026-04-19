@@ -10,10 +10,11 @@ targets = [
 ]
 
 [advisories]
-# paste is unmaintained (RUSTSEC-2024-0436) but it's a transitive dep
-# of rmcp that we can't control. No vulnerability, just unmaintained.
+# bincode 1.x is "complete" per upstream (RUSTSEC-2025-0004) and pulled in
+# transitively via steel-core 0.8.2. No vulnerability, just an unmaintained
+# notice from a repo that considers its 1.x branch finished.
 ignore = [
-    { id = "RUSTSEC-2024-0436", reason = "transitive dep of rmcp; no vulnerability" },
+    { id = "RUSTSEC-2025-0141", reason = "bincode 1.x transitive dep of steel-core; unmaintained but not vulnerable" },
 ]
 
 [licenses]

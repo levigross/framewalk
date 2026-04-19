@@ -72,7 +72,7 @@ tokio = { version = "1", features = [
 # rmcp: official Rust MCP SDK. Feature-gated to stdio-only (server, macros,
 # schemars) so we avoid pulling in the SSE/HTTP/WebSocket transports — which
 # would drag in hyper/rustls/crypto stacks and blow up the static-musl build.
-rmcp = { version = "0.8", features = ["server", "transport-io", "macros"] }
+rmcp = { version = "1.5", features = ["server", "transport-io", "macros"] }
 # serde + serde_json + schemars: tool input schemas. rmcp re-exports these
 # but pinning them here keeps the dep graph visible.
 serde = { version = "1", features = ["derive"] }

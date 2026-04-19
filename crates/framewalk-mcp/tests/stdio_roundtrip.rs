@@ -156,7 +156,7 @@ fn find_reply(replies: &[serde_json::Value], id: i64) -> &serde_json::Value {
 #[allow(clippy::too_many_lines)]
 async fn initialize_and_list_tools() {
     let replies = drive_server(&[
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
         r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
         r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#,
     ])
@@ -364,7 +364,7 @@ async fn initialize_and_list_tools() {
 #[ignore = "spawns real gdb via the mcp binary; run with --ignored"]
 async fn tools_call_gdb_version() {
     let replies = drive_server(&[
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
         r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
         r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"gdb_version","arguments":{}}}"#,
     ])
@@ -398,7 +398,7 @@ async fn tools_call_gdb_version() {
 #[ignore = "spawns real gdb via the mcp binary; run with --ignored"]
 async fn raw_mi_command_rejects_shell_by_default() {
     let replies = drive_server(&[
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
         r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
         r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"mi_raw_command","arguments":{"command":"-interpreter-exec console \"shell ls\""}}}"#,
     ])
