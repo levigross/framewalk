@@ -24,11 +24,10 @@ allow = [
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
     "BSD-2-Clause",
-    "BSD-3-Clause",
-    "ISC",
+    # Steel's persistent data-structure stack pulls these transitively
+    # through im-rc, bitmaps, and sized-chunks.
+    "MPL-2.0",
     "Unicode-3.0",
-    "Unicode-DFS-2016",
-    "Zlib",
 ]
 confidence-threshold = 0.8
 

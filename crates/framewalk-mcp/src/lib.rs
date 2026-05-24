@@ -5,6 +5,7 @@
 //! security guards, and serialisation helpers — lives here so it can be
 //! unit- and integration-tested.
 
+mod background;
 pub(crate) mod config;
 pub(crate) mod raw_guard;
 pub(crate) mod resources;
@@ -15,6 +16,7 @@ pub(crate) mod tool_catalog;
 pub(crate) mod tools;
 pub(crate) mod types;
 
+pub use background::BackgroundTasks;
 pub use config::Config;
 pub use scheme::{SchemeHandle, SchemeSettings};
 pub use server::FramewalkMcp;

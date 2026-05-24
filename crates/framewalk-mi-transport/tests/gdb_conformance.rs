@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use framewalk_mi_codec::{MiCommand, Value};
 use framewalk_mi_protocol::{BreakpointId, CommandOutcome, Event, ThreadId};
-use framewalk_mi_transport::{spawn, GdbConfig, TransportHandle};
+use framewalk_mi_transport::{GdbConfig, TransportHandle, spawn};
 use tokio::time::timeout;
 
 /// Time budget for each conformance test. Generous because first spawn

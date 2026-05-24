@@ -39,6 +39,11 @@ top-level `result` field. `include_streams` defaults to `false`; keep it
 off for the leanest payload and use `drain_events` when you need logs,
 warnings, or console output after the fact.
 
+The eval budget interrupts CPU-bound Scheme code and bounds waits on
+Scheme primitives such as `(mi ...)` and `(gdb-version)`. If a raw MI
+command times out after it has been sent to GDB, framewalk stops waiting
+for that Scheme call, but it does not roll back the GDB command.
+
 ```json
 {"name": "scheme_eval", "arguments": {"code": "(load-file \"/tmp/hello\") (set-breakpoint \"main\") (run) (wait-for-stop) (backtrace)"}}
 ```

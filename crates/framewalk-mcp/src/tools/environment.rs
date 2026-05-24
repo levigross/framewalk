@@ -204,7 +204,8 @@ framewalk_tool_block! {
                     | framewalk_mi_protocol::CommandOutcome::Connected(_)
             ) && crate::server_helpers::is_remote_target_transport(&transport_name)
             {
-                crate::server_helpers::spawn_vmlinux_probe(self.transport_arc());
+                let handle = crate::server_helpers::spawn_vmlinux_probe(self.transport_arc());
+                self.background_tasks().spawn(handle);
             }
 
             Ok(crate::server_helpers::format_outcome(&outcome))

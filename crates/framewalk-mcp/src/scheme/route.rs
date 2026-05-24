@@ -9,10 +9,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use rmcp::ErrorData as McpError;
 use rmcp::handler::server::router::tool::ToolRoute;
 use rmcp::handler::server::tool::{parse_json_object, schema_for_type};
 use rmcp::model::{CallToolResult, Content, Tool};
-use rmcp::ErrorData as McpError;
 
 use crate::scheme::worker::SchemeHandle;
 use crate::server::FramewalkMcp;
@@ -35,12 +35,12 @@ pub(crate) struct SchemeEvalArgs {
     /// covers the workload. Must be > 0; capped at 3600.
     #[serde(default)]
     pub budget_secs: Option<u64>,
-    /// When `true` (default), stream-class events (`console`,
+    /// When `true`, stream-class events (`console`,
     /// `target-output`, `log`) produced during this eval are appended
     /// to the response as a `streams` array.  Saves a round-trip
     /// against `drain-events` in the common "wait then inspect"
-    /// pattern.  Disable if you are already draining events elsewhere
-    /// or want the smallest possible response payload.
+    /// pattern.  Defaults to false for the smallest possible response
+    /// payload.
     #[serde(default = "default_include_streams")]
     pub include_streams: bool,
 }
@@ -144,7 +144,7 @@ fn render_reply_json(
     reply: &crate::scheme::worker::SchemeEvalReply,
     include_streams: bool,
 ) -> String {
-    use serde_json::{json, Map, Value};
+    use serde_json::{Map, Value, json};
     let mut obj = Map::new();
     obj.insert("result".into(), reply.result.clone());
     if include_streams && !reply.streams.is_empty() {

@@ -26,6 +26,8 @@ This page covers the framewalk-specific primitives and prelude.
   default (60 seconds unless overridden). Wait helpers use
   `--wait-for-stop-timeout-secs` /
   `FRAMEWALK_WAIT_FOR_STOP_TIMEOUT_SECS` (30 seconds unless overridden).
+  The eval budget interrupts CPU-bound Scheme code and bounds waits on
+  Rust-backed primitives such as `(mi ...)` and `(gdb-version)`.
   **Budget interaction:** a per-call wait timeout that exceeds the
   remaining `scheme_eval` budget raises an error immediately rather than
   being silently killed at the outer boundary. For long waits, increase
@@ -57,6 +59,11 @@ command families. Unrecognised families (including `-interpreter-exec`
 and `-target-exec-command`) are rejected unless the server was started
 with `--allow-shell`. Commands must start with `-`. See
 `framewalk://reference/allowed-mi` for the canonical allowlist.
+
+**Timeout:** the command wait is bounded by the remaining
+`scheme_eval` budget. If the timeout fires after the command has already
+been sent to GDB, framewalk stops waiting for this Scheme call but does
+not roll back the GDB command.
 
 ### `(mi-quote string)` → string
 

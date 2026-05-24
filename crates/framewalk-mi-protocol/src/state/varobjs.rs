@@ -87,10 +87,9 @@ impl VarObjRegistry {
     }
 
     pub(crate) fn on_var_update(&mut self, results: &[(String, Value)]) {
-        let Some(Value::List(list)) =
-            results
-                .iter()
-                .find_map(|(k, v)| if k == "changelist" { Some(v) } else { None })
+        let Some(Value::List(list)) = results
+            .iter()
+            .find_map(|(k, v)| if k == "changelist" { Some(v) } else { None })
         else {
             return;
         };

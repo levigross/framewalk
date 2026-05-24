@@ -125,10 +125,9 @@ impl BreakpointRegistry {
 }
 
 fn extract_locations(tuple: &[(String, Value)]) -> Vec<BreakpointLocation> {
-    let Some(Value::List(list)) =
-        tuple
-            .iter()
-            .find_map(|(k, v)| if k == "locations" { Some(v) } else { None })
+    let Some(Value::List(list)) = tuple
+        .iter()
+        .find_map(|(k, v)| if k == "locations" { Some(v) } else { None })
     else {
         return Vec::new();
     };

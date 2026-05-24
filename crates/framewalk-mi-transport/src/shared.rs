@@ -22,7 +22,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use framewalk_mi_protocol::{CommandHandle, CommandOutcome, Connection, Event, StoppedEvent};
 use parking_lot::Mutex;
-use tokio::sync::{broadcast, oneshot, Notify};
+use tokio::sync::{Notify, broadcast, oneshot};
 
 /// Monotonic sequence assigned to every event the reader task observes.
 pub type EventSeq = u64;

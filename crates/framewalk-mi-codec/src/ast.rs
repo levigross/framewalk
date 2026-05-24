@@ -12,7 +12,7 @@
 //! value                → const | tuple | list
 //! ```
 //!
-//! Design choices baked into these types (see `wild-tickling-torvalds.md`):
+//! Design choices baked into these types:
 //!
 //! - **`AsyncClass` is a newtype over `String`, not an enum.** GDB adds new
 //!   async classes with every release (e.g. `=record-started`,
@@ -140,9 +140,7 @@ pub enum ResultClass {
     /// `^running` — command accepted; target is now running.
     ///
     /// This is a *completion* from the protocol's perspective — the caller
-    /// should not keep the command pending waiting for a `*stopped`. See
-    /// the "`^running` is a command completion, not a pending state" design
-    /// decision in `wild-tickling-torvalds.md`.
+    /// should not keep the command pending waiting for a `*stopped`.
     Running,
     /// `^connected` — GDB has connected to a remote target.
     Connected,
