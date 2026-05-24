@@ -8,6 +8,10 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    advisory-db = {
+      url = "github:RustSec/advisory-db";
+      flake = false;
+    };
   };
 
   outputs = inputs @ { self, flake-parts, ... }:

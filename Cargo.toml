@@ -16,12 +16,6 @@ license = "Apache-2.0"
 repository = "https://github.com/levigross/framewalk"
 authors = ["Levi Gross <levi@levigross.com>"]
 
-# Crane reads this when the workspace root has no [package] section, which is
-# our case (virtual workspace). Silences the warning and makes derivations
-# carry a meaningful name.
-[workspace.metadata.crane]
-name = "framewalk"
-
 # Workspace-level lint policy. Individual crates inherit via `[lints] workspace = true`.
 # Clean-room discipline: no unsafe in wire/codec/protocol; the transport crate may
 # need std::process shenanigans but should still justify every unsafe block.

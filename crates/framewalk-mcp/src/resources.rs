@@ -16,14 +16,14 @@
 use std::borrow::Cow;
 
 use rmcp::{
+    ErrorData as McpError,
     model::{
         AnnotateAble, ListResourcesResult, RawResource, ReadResourceResult, Resource,
         ResourceContents,
     },
-    ErrorData as McpError,
 };
 
-use crate::raw_guard::{allowed_command_allowlist, AllowlistMatch, ALLOWED_MI_REFERENCE_URI};
+use crate::raw_guard::{ALLOWED_MI_REFERENCE_URI, AllowlistMatch, allowed_command_allowlist};
 
 /// MIME type reported for every resource.
 const MIME: &str = "text/markdown";
@@ -138,8 +138,7 @@ const RESOURCES: &[Entry] = &[
     Entry {
         uri: "framewalk://guide/execution-model",
         name: "execution-model",
-        description:
-            "How MI commands complete, when stops occur, and how to observe local target state.",
+        description: "How MI commands complete, when stops occur, and how to observe local target state.",
         content: EntryContent::Static(include_str!("resources/guide-execution-model.md")),
     },
     Entry {
@@ -196,8 +195,7 @@ const RESOURCES: &[Entry] = &[
     Entry {
         uri: "framewalk://reference/session",
         name: "reference-session",
-        description:
-            "Session and recovery tools: load_file, attach, target_state, drain_events, reconnect.",
+        description: "Session and recovery tools: load_file, attach, target_state, drain_events, reconnect.",
         content: EntryContent::Static(include_str!("resources/reference-session.md")),
     },
     Entry {

@@ -43,4 +43,4 @@ pub(crate) mod subprocess;
 pub use error::TransportError;
 pub use handle::{StateSnapshot, TransportHandle};
 pub use shared::EventSeq;
-pub use subprocess::{spawn, GdbConfig};
+pub use subprocess::{GdbConfig, spawn};

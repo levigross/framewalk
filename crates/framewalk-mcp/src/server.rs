@@ -11,6 +11,7 @@ use framewalk_mi_codec::MiCommand;
 use framewalk_mi_protocol::CommandOutcome;
 use framewalk_mi_transport::TransportHandle;
 use rmcp::{
+    ErrorData as McpError, ServerHandler,
     handler::server::router::tool::ToolRouter,
     model::{
         CallToolResult, Implementation, ListResourcesResult, PaginatedRequestParams,
@@ -18,9 +19,10 @@ use rmcp::{
         ServerInfo,
     },
     service::{RequestContext, RoleServer},
-    tool_handler, ErrorData as McpError, ServerHandler,
+    tool_handler,
 };
 
+use crate::background::BackgroundTasks;
 use crate::config::Mode;
 use crate::raw_guard::validate_raw_mi_command;
 use crate::resources;
@@ -38,6 +40,7 @@ use crate::{tool_catalog, tools};
 #[derive(Clone)]
 pub struct FramewalkMcp {
     transport: Arc<TransportHandle>,
+    background_tasks: Arc<BackgroundTasks>,
     allow_shell: bool,
     mode: Mode,
     tool_router: ToolRouter<Self>,
@@ -49,6 +52,7 @@ impl std::fmt::Debug for FramewalkMcp {
             .field("allow_shell", &self.allow_shell)
             .field("mode", &self.mode)
             .field("transport_pid", &self.transport.child_id())
+            .field("background_tasks", &self.background_tasks)
             .finish_non_exhaustive()
     }
 }
@@ -66,6 +70,7 @@ impl FramewalkMcp {
     #[must_use]
     pub fn new(
         transport: Arc<TransportHandle>,
+        background_tasks: Arc<BackgroundTasks>,
         allow_shell: bool,
         mode: Mode,
         scheme: Arc<SchemeHandle>,
@@ -92,6 +97,7 @@ impl FramewalkMcp {
 
         Self {
             transport,
+            background_tasks,
             allow_shell,
             mode,
             tool_router,
@@ -147,6 +153,10 @@ impl FramewalkMcp {
     /// post-connect vmlinux probe) that needs its own lifetime.
     pub(crate) fn transport_arc(&self) -> Arc<TransportHandle> {
         Arc::clone(&self.transport)
+    }
+
+    pub(crate) fn background_tasks(&self) -> &BackgroundTasks {
+        &self.background_tasks
     }
 }
 

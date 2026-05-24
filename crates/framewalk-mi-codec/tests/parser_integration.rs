@@ -8,8 +8,8 @@
 //! implementation was consulted.
 
 use framewalk_mi_codec::{
-    encode_command, parse_record, AsyncClass, AsyncRecord, CodecErrorKind, ListValue, MiCommand,
-    Record, ResultClass, ResultRecord, Token, Value,
+    AsyncClass, AsyncRecord, CodecErrorKind, ListValue, MiCommand, Record, ResultClass,
+    ResultRecord, Token, Value, encode_command, parse_record,
 };
 
 // ---------------------------------------------------------------------------
@@ -351,7 +351,9 @@ fn parses_list_of_values() {
 
 #[test]
 fn parses_list_of_results() {
-    let r = parse("^done,bkpts=[bkpt={number=\"1\",type=\"breakpoint\"},bkpt={number=\"2\",type=\"breakpoint\"}]");
+    let r = parse(
+        "^done,bkpts=[bkpt={number=\"1\",type=\"breakpoint\"},bkpt={number=\"2\",type=\"breakpoint\"}]",
+    );
     if let Record::Result(rr) = r {
         if let Value::List(ListValue::Results(pairs)) = &rr.results[0].1 {
             assert_eq!(pairs.len(), 2);

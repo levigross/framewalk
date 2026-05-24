@@ -28,10 +28,10 @@
 use framewalk_mi_codec::{ListValue, Value};
 use framewalk_mi_protocol::CommandOutcome;
 use serde_json::{Map as JsonMap, Number as JsonNumber, Value as JsonValue};
+use steel::HashMap;
 use steel::gc::Gc;
 use steel::rerrs::{ErrorKind, SteelErr};
 use steel::rvals::{SteelHashMap, SteelString, SteelVal};
-use steel::HashMap;
 
 /// Maximum byte length for fallback stringification of a single Scheme
 /// value when it cannot be represented cleanly as JSON. Prevents an

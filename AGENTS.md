@@ -24,7 +24,7 @@ sans-IO core outward:
 Everything else:
 
 - `crates/*/tests/` — integration tests. Unit tests live inline in `#[cfg(test)]` modules.
-- `crates/framewalk-mcp/src/resources/` — 28 markdown files (guides, references, recipes) embedded into the binary and served over MCP `resources/list`/`resources/read`.
+- `crates/framewalk-mcp/src/resources/` — markdown resource files (guides, references, recipes) embedded into the binary and served over MCP `resources/list`/`resources/read`.
 - `docs/` — user-facing docs: `getting-started.md`, `modes.md`, `scheme-reference.md`, `no-source.md`.
 - `examples/` — demo debug targets (C, C++, Rust) plus Scheme sessions.
 - `nix/` — `flake-module.nix`, `per-system/*.nix`, `modules/downstream-flake-module.nix` (flake-parts module for consumers).
@@ -51,7 +51,7 @@ nix develop -c cargo deny check                             # license + advisory
 
 `validate.sh` self-enters the nix shell via a sentinel env var; running it outside `nix develop` still works.
 
-CI (`.github/workflows/pr-tests.yml`) runs two jobs on PRs and pushes to `main`: `nix develop -c cargo test --workspace --locked` for fast unit feedback, and `scripts/validate.sh --locked` for the full gdb-backed integration suite. Both must pass before merge.
+CI (`.github/workflows/pr-tests.yml`) runs `nix flake check`, `nix develop -c cargo test --workspace --locked` for fast unit feedback, and `scripts/validate.sh --locked` for the full gdb-backed integration suite. All must pass before merge.
 
 ## Architecture invariants
 

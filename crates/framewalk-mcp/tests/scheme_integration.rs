@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use framewalk_mcp::{SchemeHandle, SchemeSettings};
-use framewalk_mi_transport::{spawn, GdbConfig};
+use framewalk_mi_transport::{GdbConfig, spawn};
 use tokio::time::timeout;
 
 const TEST_TIMEOUT: Duration = Duration::from_secs(20);

@@ -32,7 +32,7 @@ use framewalk_mi_protocol::{
 use tokio::process::Child;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinHandle;
-use tokio::time::{timeout, timeout_at, Instant};
+use tokio::time::{Instant, timeout, timeout_at};
 use tracing::{debug, warn};
 
 use crate::error::TransportError;

@@ -59,7 +59,7 @@ mod prelude {
     pub(crate) use framewalk_mi_codec::MiCommand;
     pub(crate) use framewalk_mi_protocol::mi_types::{TraceFindMode, WatchType};
     pub(crate) use rmcp::{
-        handler::server::wrapper::Parameters, model::CallToolResult, tool, ErrorData as McpError,
+        ErrorData as McpError, handler::server::wrapper::Parameters, model::CallToolResult, tool,
     };
 }
 

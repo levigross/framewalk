@@ -1,5 +1,5 @@
-use super::prelude::*;
 use super::FULL_CORE;
+use super::prelude::*;
 
 use crate::server_helpers::{
     drain_observed_events, json_tool_result, observe_target_state, outcome_to_json,

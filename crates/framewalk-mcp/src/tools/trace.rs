@@ -1,5 +1,5 @@
-use super::prelude::*;
 use super::FULL_ONLY;
+use super::prelude::*;
 
 framewalk_tool_block! {
     router: catchpoint_tool_router,

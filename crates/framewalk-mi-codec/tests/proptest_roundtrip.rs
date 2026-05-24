@@ -10,7 +10,7 @@
 //! exact same `s` back. This is the single most important guarantee the
 //! encoder makes: whatever the encoder produces, the parser understands.
 
-use framewalk_mi_codec::{encode::cstring::encode_cstring, parse_record, Record};
+use framewalk_mi_codec::{Record, encode::cstring::encode_cstring, parse_record};
 use proptest::prelude::*;
 
 proptest! {

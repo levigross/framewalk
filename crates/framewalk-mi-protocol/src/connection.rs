@@ -14,8 +14,8 @@
 use std::collections::VecDeque;
 
 use framewalk_mi_codec::{
-    encode_command, parse_record, AsyncRecord, Record, ResultClass, ResultRecord, StreamRecord,
-    Value,
+    AsyncRecord, Record, ResultClass, ResultRecord, StreamRecord, Value, encode_command,
+    parse_record,
 };
 use framewalk_mi_wire::{Frame, Framer};
 use tracing::{debug, trace, warn};

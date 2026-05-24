@@ -36,5 +36,6 @@ let
     rustPlatform.buildRustPackage (commonArgs // args);
 in
 {
+  advisoryDb = inputs.advisory-db;
   inherit commonArgs mkRustPackage muslTarget pkgs rustPlatform rustToolchain src;
 }

@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use framewalk_mi_codec::MiCommand;
 use framewalk_mi_protocol::{CommandOutcome, Event};
-use framewalk_mi_transport::{spawn, GdbConfig, TransportHandle};
+use framewalk_mi_transport::{GdbConfig, TransportHandle, spawn};
 use tokio::time::timeout;
 
 const TEST_TIMEOUT: Duration = Duration::from_secs(15);

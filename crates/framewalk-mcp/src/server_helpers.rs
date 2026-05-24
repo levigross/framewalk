@@ -4,15 +4,15 @@
 //! command strings. Kept separate from `server.rs` because they are
 //! module-scope functions with no reason to touch `self`.
 
-use framewalk_mi_codec::{encode_command, MiCommand, Value};
+use framewalk_mi_codec::{MiCommand, Value, encode_command};
 use framewalk_mi_protocol::{CommandOutcome, Event, StoppedReason, TargetState};
-use rmcp::model::{CallToolResult, Content};
 use rmcp::ErrorData as McpError;
+use rmcp::model::{CallToolResult, Content};
 use serde::Serialize;
 
 use framewalk_mi_transport::{EventSeq, TransportError, TransportHandle};
 
-use crate::raw_guard::{raw_mi_operation, RawMiRejection};
+use crate::raw_guard::{RawMiRejection, raw_mi_operation};
 use crate::types::symbol;
 
 /// Turn a `CommandOutcome` into a `CallToolResult` with a single text
@@ -205,7 +205,9 @@ pub(crate) fn is_remote_target_transport(transport: &str) -> bool {
 /// Spawns a bounded background task so a slow probe cannot block the
 /// `-target-select` tool return.  Silent on probe failure, absence of
 /// the symbol, or timeout — detection is best-effort, not a guarantee.
-pub(crate) fn spawn_vmlinux_probe(transport: std::sync::Arc<TransportHandle>) {
+pub(crate) fn spawn_vmlinux_probe(
+    transport: std::sync::Arc<TransportHandle>,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let probe = MiCommand::new("symbol-info-variables").option_with("name", "linux_banner");
 
@@ -232,7 +234,7 @@ pub(crate) fn spawn_vmlinux_probe(transport: std::sync::Arc<TransportHandle>) {
                 "info: vmlinux-shaped target detected — consider `source scripts/gdb/vmlinux-gdb.py`".to_string(),
             );
         }
-    });
+    })
 }
 
 fn vmlinux_probe_detected(results: &[(String, Value)]) -> bool {

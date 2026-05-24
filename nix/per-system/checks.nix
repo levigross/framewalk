@@ -1,4 +1,4 @@
-{ mkRustPackage, packages, pkgs, rustToolchain, ... }:
+{ advisoryDb, mkRustPackage, packages, pkgs, rustToolchain, ... }:
 {
   inherit (packages) framewalk;
 
@@ -39,10 +39,23 @@
 
   framewalk-deny = mkRustPackage {
     pname = "framewalk-deny";
-    nativeBuildInputs = [ rustToolchain pkgs.cargo-deny ];
+    nativeBuildInputs = [ rustToolchain pkgs.cargo-deny pkgs.git ];
     buildPhase = "true";
     checkPhase = ''
-      cargo deny check
+      export HOME="$TMPDIR"
+      export CARGO_HOME="$TMPDIR/cargo"
+      mkdir -p "$CARGO_HOME/advisory-dbs"
+      db="$CARGO_HOME/advisory-dbs/advisory-db-3157b0e258782691"
+      cp -R --no-preserve=mode,ownership ${advisoryDb} \
+        "$db"
+      chmod -R u+w "$db"
+      git -C "$db" init -q
+      git -C "$db" add .
+      git -C "$db" \
+        -c user.name=framewalk \
+        -c user.email=framewalk@example.invalid \
+        commit -q -m advisory-db
+      cargo deny check --disable-fetch
     '';
     installPhase = "mkdir -p $out";
   };

@@ -18,13 +18,14 @@ use std::time::{Duration, Instant};
 
 use framewalk_mi_transport::TransportHandle;
 use steel::rerrs::SteelErr;
+use steel::rvals::SteelVal;
 use steel::steel_vm::engine::Engine;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{error, info};
 
 use crate::scheme::bindings::EvalDeadline;
 use crate::scheme::marshal;
-use crate::scheme::{bindings, SchemeSettings};
+use crate::scheme::{SchemeSettings, bindings};
 
 /// Capacity of the eval request channel. Provides backpressure if
 /// requests arrive faster than the single-threaded Scheme engine can
@@ -385,7 +386,7 @@ fn process_one(
     // Handle a panic from the Steel VM first (rebuild the engine),
     // then handle the normal eval result separately — avoids the
     // nested Ok(Ok(..)) / Ok(Err(..)) / Err(..) antipattern.
-    let eval_result = match std::panic::catch_unwind(AssertUnwindSafe(|| engine.run(code))) {
+    let eval_result = match run_engine_with_budget(engine, code, effective_budget) {
         Ok(r) => r,
         Err(panic_payload) => {
             let msg = panic_message(&panic_payload);
@@ -400,6 +401,7 @@ fn process_one(
                         panic = %msg,
                         "scheme engine rebuild failed after panic; worker exiting"
                     );
+                    clear_eval_deadline(deadline);
                     request
                         .reply
                         .send(Err(format!(
@@ -409,6 +411,7 @@ fn process_one(
                     return;
                 }
             }
+            clear_eval_deadline(deadline);
             request
                 .reply
                 .send(Err(format!("scheme engine panicked: {msg}")))
@@ -416,6 +419,8 @@ fn process_one(
             return;
         }
     };
+
+    clear_eval_deadline(deadline);
 
     let response = match eval_result {
         Ok(values) => {
@@ -437,6 +442,41 @@ fn process_one(
     // A send error means the caller timed out and dropped the
     // receiver — that's expected, not a worker-level error.
     request.reply.send(response).ok();
+}
+
+fn run_engine_with_budget(
+    engine: &mut Engine,
+    code: String,
+    budget: Duration,
+) -> std::thread::Result<Result<Vec<SteelVal>, SteelErr>> {
+    let controller = engine.get_thread_state_controller();
+    let controller_for_watchdog = controller.clone();
+    let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
+
+    let watchdog = std::thread::spawn(move || {
+        if done_rx.recv_timeout(budget).is_err() {
+            controller_for_watchdog.interrupt();
+        }
+    });
+
+    let eval_result = std::panic::catch_unwind(AssertUnwindSafe(|| engine.run(code)));
+    done_tx.send(()).ok();
+
+    if let Err(panic) = watchdog.join() {
+        tracing::warn!(
+            panic = %panic_message(&panic),
+            "scheme eval watchdog panicked"
+        );
+    }
+    controller.resume();
+
+    eval_result
+}
+
+fn clear_eval_deadline(deadline: &EvalDeadline) {
+    if let Ok(mut guard) = deadline.lock() {
+        *guard = None;
+    }
 }
 
 /// Drain stream-class events (`console`, `target-output`, `log`)
@@ -555,5 +595,31 @@ fn panic_message(payload: &dyn std::any::Any) -> String {
         s.clone()
     } else {
         "unknown panic".to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn eval_budget_interrupts_loop_and_engine_recovers() {
+        let mut engine = Engine::new();
+
+        let timed_out = run_engine_with_budget(
+            &mut engine,
+            "(define (loop) (loop)) (loop)".to_string(),
+            Duration::from_millis(50),
+        )
+        .expect("scheme eval should not panic");
+
+        assert!(timed_out.is_err());
+
+        let recovered =
+            run_engine_with_budget(&mut engine, "(+ 1 2)".to_string(), Duration::from_secs(1))
+                .expect("scheme eval should not panic")
+                .expect("scheme engine should recover after timeout");
+
+        assert_eq!(marshal::steel_to_display_string(&recovered), "3");
     }
 }

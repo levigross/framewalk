@@ -15,9 +15,9 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use clap::Parser;
-use framewalk_mcp::{Config, FramewalkMcp, SchemeHandle, SchemeSettings};
-use framewalk_mi_transport::{spawn, GdbConfig};
-use rmcp::{transport::stdio, ServiceExt};
+use framewalk_mcp::{BackgroundTasks, Config, FramewalkMcp, SchemeHandle, SchemeSettings};
+use framewalk_mi_transport::{GdbConfig, spawn};
+use rmcp::{ServiceExt, transport::stdio};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -62,6 +62,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("failed to spawn gdb subprocess")?;
     let transport = Arc::new(transport);
+    let background_tasks = Arc::new(BackgroundTasks::default());
 
     let scheme_settings = SchemeSettings {
         eval_timeout: std::time::Duration::from_secs(config.scheme_eval_timeout_secs),
@@ -90,6 +91,7 @@ async fn main() -> anyhow::Result<()> {
     // shutdown below.
     let server = FramewalkMcp::new(
         Arc::clone(&transport),
+        Arc::clone(&background_tasks),
         config.allow_shell,
         config.mode,
         Arc::clone(&scheme),
@@ -114,19 +116,25 @@ async fn main() -> anyhow::Result<()> {
 
     info!("mcp client disconnected; shutting down gdb");
 
-    // Ordered shutdown.  After `waiting()` has returned the only
-    // live `Arc<SchemeHandle>` is our local binding, and the only
-    // live `Arc<TransportHandle>` clones are the local binding plus
-    // the one captured by the scheme worker thread's closure.
+    // Ordered shutdown.  After `waiting()` has returned the service
+    // no longer accepts new work, so first drain best-effort tasks that
+    // may have cloned the transport.  Then the only live
+    // `Arc<SchemeHandle>` is our local binding, and the only live
+    // `Arc<TransportHandle>` clones are the local binding plus the one
+    // captured by the scheme worker thread's closure.
     //
-    //   1. Consume the scheme Arc, close the eval channel, and join
+    //   1. Abort and join registered background tasks, dropping their
+    //      transport Arcs.
+    //   2. Consume the scheme Arc, close the eval channel, and join
     //      the worker thread.  `JoinHandle::join` is blocking so we
     //      offload it to `spawn_blocking` rather than stalling the
     //      runtime thread.  Thread exit drops the worker's captured
     //      transport Arc.
-    //   2. `Arc::into_inner(transport)` is now the unique holder and
+    //   3. `Arc::into_inner(transport)` is now the unique holder and
     //      returns `Some`; call `shutdown()` to issue `-gdb-exit`
     //      and collect the child's exit status.
+    background_tasks.abort_and_wait().await;
+
     let scheme_handle =
         Arc::into_inner(scheme).expect("scheme Arc must be unique after rmcp service drop");
     if let Some(thread) = scheme_handle.join() {

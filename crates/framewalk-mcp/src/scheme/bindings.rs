@@ -14,16 +14,16 @@ use std::time::{Duration, Instant};
 use framewalk_mi_codec::{MiCommand, Value};
 use framewalk_mi_protocol::CommandOutcome;
 use framewalk_mi_transport::TransportHandle;
+use steel::HashMap;
 use steel::gc::Gc;
 use steel::rerrs::{ErrorKind, SteelErr};
 use steel::rvals::{SteelHashMap, SteelString, SteelVal};
 use steel::steel_vm::engine::Engine;
 use steel::steel_vm::register_fn::RegisterFn;
-use steel::HashMap;
 
 use crate::raw_guard::validate_raw_mi_command;
-use crate::scheme::marshal;
 use crate::scheme::SchemeSettings;
+use crate::scheme::marshal;
 use crate::server_helpers::{self, timeout_context_message};
 
 /// Shared deadline for the current `scheme_eval` invocation.
@@ -47,8 +47,14 @@ pub(crate) fn register_all(
     settings: SchemeSettings,
     deadline: &EvalDeadline,
 ) {
-    register_mi(engine, Arc::clone(&transport), allow_shell, rt.clone());
-    register_gdb_version(engine, Arc::clone(&transport), rt.clone());
+    register_mi(
+        engine,
+        Arc::clone(&transport),
+        allow_shell,
+        rt.clone(),
+        deadline,
+    );
+    register_gdb_version(engine, Arc::clone(&transport), rt.clone(), deadline);
     register_mi_quote(engine);
     register_trigger_and_wait_primitives(engine, &transport, rt, settings.wait_timeout, deadline);
     register_wait_for_stop(
@@ -137,7 +143,9 @@ fn register_mi(
     transport: Arc<TransportHandle>,
     allow_shell: bool,
     rt: tokio::runtime::Handle,
+    deadline: &EvalDeadline,
 ) {
+    let deadline = Arc::clone(deadline);
     engine.register_fn("mi", move |command: String| -> Result<SteelVal, SteelErr> {
         // Security gate — same boundary as mi_raw_command.
         validate_raw_mi_command(&command, allow_shell).map_err(|rejection| {
@@ -147,9 +155,8 @@ fn register_mi(
             )
         })?;
 
-        let outcome = rt
-            .block_on(transport.submit_raw(&command))
-            .map_err(|err| SteelErr::new(ErrorKind::Generic, format!("transport error: {err}")))?;
+        let timeout = remaining_eval_budget(&deadline)?;
+        let outcome = submit_raw_with_timeout(&transport, &rt, &command, timeout, "mi command")?;
 
         server_helpers::remember_successful_raw_target_select(&transport, &command, &outcome);
         marshal::outcome_to_steel(&outcome)
@@ -171,12 +178,19 @@ fn register_gdb_version(
     engine: &mut Engine,
     transport: Arc<TransportHandle>,
     rt: tokio::runtime::Handle,
+    deadline: &EvalDeadline,
 ) {
+    let deadline = Arc::clone(deadline);
     engine.register_fn("gdb-version", move || -> Result<SteelVal, SteelErr> {
         let before_seq = transport.event_cursor();
-        let outcome = rt
-            .block_on(transport.submit(MiCommand::new("gdb-version")))
-            .map_err(|err| SteelErr::new(ErrorKind::Generic, format!("transport error: {err}")))?;
+        let timeout = remaining_eval_budget(&deadline)?;
+        let outcome = submit_with_timeout(
+            &transport,
+            &rt,
+            MiCommand::new("gdb-version"),
+            timeout,
+            "gdb-version",
+        )?;
 
         match outcome {
             CommandOutcome::Done(_) | CommandOutcome::Connected(_) => {
@@ -324,7 +338,13 @@ fn register_trigger_and_wait_primitives(
         let deadline_default = Arc::clone(deadline);
         engine.register_fn(default_name, move || -> Result<SteelVal, SteelErr> {
             let timeout = clamp_to_eval_budget(default_timeout, &deadline_default)?;
-            submit_and_await_stop(&default_transport, &default_rt, &default_command, timeout)
+            submit_and_await_stop(
+                &default_transport,
+                &default_rt,
+                &default_command,
+                timeout,
+                &deadline_default,
+            )
         });
 
         let deadline_timeout = Arc::clone(deadline);
@@ -333,7 +353,7 @@ fn register_trigger_and_wait_primitives(
             move |seconds: isize| -> Result<SteelVal, SteelErr> {
                 let timeout = timeout_from_seconds(seconds)?;
                 check_eval_budget(timeout, &deadline_timeout)?;
-                submit_and_await_stop(&transport, &rt, &command, timeout)
+                submit_and_await_stop(&transport, &rt, &command, timeout, &deadline_timeout)
             },
         );
     }
@@ -347,7 +367,13 @@ fn register_trigger_and_wait_primitives(
         move |loc: String| -> Result<SteelVal, SteelErr> {
             let raw = format!("-exec-until {}", mi_quote_param(&loc));
             let timeout = clamp_to_eval_budget(default_timeout, &deadline_default)?;
-            submit_and_await_stop(&transport_default, &rt_default, &raw, timeout)
+            submit_and_await_stop(
+                &transport_default,
+                &rt_default,
+                &raw,
+                timeout,
+                &deadline_default,
+            )
         },
     );
     let transport = Arc::clone(transport);
@@ -359,7 +385,7 @@ fn register_trigger_and_wait_primitives(
             let raw = format!("-exec-until {}", mi_quote_param(&loc));
             let timeout = timeout_from_seconds(seconds)?;
             check_eval_budget(timeout, &deadline_timeout)?;
-            submit_and_await_stop(&transport, &rt, &raw, timeout)
+            submit_and_await_stop(&transport, &rt, &raw, timeout, &deadline_timeout)
         },
     );
 }
@@ -374,30 +400,29 @@ fn submit_and_await_stop(
     rt: &tokio::runtime::Handle,
     raw: &str,
     timeout: Duration,
+    deadline: &EvalDeadline,
 ) -> Result<SteelVal, SteelErr> {
     let after_seq = transport.event_cursor();
+    let submit_timeout = clamp_to_eval_budget(timeout, deadline)?;
+    let outcome = submit_raw_with_timeout(transport, rt, raw, submit_timeout, "trigger command")?;
 
+    // If GDB didn't actually put the target into the running state,
+    // there will be no `*stopped` to wait for.  Return the outcome
+    // as-is — `marshal::outcome_to_steel` already raises a SteelErr
+    // for `Error`/`Exit` variants.
+    if !matches!(outcome, CommandOutcome::Running) {
+        return marshal::outcome_to_steel(&outcome);
+    }
+
+    let wait_timeout = clamp_to_eval_budget(timeout, deadline)?;
     rt.block_on(async move {
-        let outcome = transport
-            .submit_raw(raw)
-            .await
-            .map_err(|err| SteelErr::new(ErrorKind::Generic, format!("transport error: {err}")))?;
-
-        // If GDB didn't actually put the target into the running
-        // state, there will be no `*stopped` to wait for.  Return the
-        // outcome as-is — `marshal::outcome_to_steel` already raises a
-        // SteelErr for `Error`/`Exit` variants.
-        if !matches!(outcome, CommandOutcome::Running) {
-            return marshal::outcome_to_steel(&outcome);
-        }
-
-        match transport.next_stop_after(after_seq, timeout).await {
+        match transport.next_stop_after(after_seq, wait_timeout).await {
             Ok(Some((_, ev))) => stopped_event_to_steel(&ev),
             Ok(None) => Err(timeout_error_with_warnings(
                 "trigger-and-wait",
                 transport,
                 after_seq,
-                timeout,
+                wait_timeout,
             )),
             Err(err) => Err(SteelErr::new(
                 ErrorKind::Generic,
@@ -505,6 +530,85 @@ fn timeout_error_with_warnings(
     SteelErr::new(ErrorKind::Generic, msg)
 }
 
+fn timeout_error(label: &str, timeout: Duration, suffix: &str) -> SteelErr {
+    SteelErr::new(
+        ErrorKind::Generic,
+        format!(
+            "{label} timed out after {} ({suffix})",
+            format_duration(timeout)
+        ),
+    )
+}
+
+fn submit_raw_with_timeout(
+    transport: &Arc<TransportHandle>,
+    rt: &tokio::runtime::Handle,
+    raw: &str,
+    timeout: Duration,
+    label: &str,
+) -> Result<CommandOutcome, SteelErr> {
+    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+    let transport = Arc::clone(transport);
+    let raw = raw.to_string();
+    let task = rt.spawn(async move {
+        tx.send(transport.submit_raw(&raw).await).ok();
+    });
+
+    match rx.recv_timeout(timeout) {
+        Ok(Ok(outcome)) => Ok(outcome),
+        Ok(Err(err)) => Err(SteelErr::new(
+            ErrorKind::Generic,
+            format!("transport error: {err}"),
+        )),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            task.abort();
+            Err(timeout_error(
+                label,
+                timeout,
+                "GDB may still complete the command later",
+            ))
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(SteelErr::new(
+            ErrorKind::Generic,
+            "transport task dropped reply channel".to_string(),
+        )),
+    }
+}
+
+fn submit_with_timeout(
+    transport: &Arc<TransportHandle>,
+    rt: &tokio::runtime::Handle,
+    command: MiCommand,
+    timeout: Duration,
+    label: &str,
+) -> Result<CommandOutcome, SteelErr> {
+    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+    let transport = Arc::clone(transport);
+    let task = rt.spawn(async move {
+        tx.send(transport.submit(command).await).ok();
+    });
+
+    match rx.recv_timeout(timeout) {
+        Ok(Ok(outcome)) => Ok(outcome),
+        Ok(Err(err)) => Err(SteelErr::new(
+            ErrorKind::Generic,
+            format!("transport error: {err}"),
+        )),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            task.abort();
+            Err(timeout_error(
+                label,
+                timeout,
+                "GDB may still complete the command later",
+            ))
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(SteelErr::new(
+            ErrorKind::Generic,
+            "transport task dropped reply channel".to_string(),
+        )),
+    }
+}
+
 /// Collect recent GDB `&"warning: ..."` log events from the journal
 /// since `after_seq`, suitable for enriching timeout error messages.
 fn collect_recent_warnings(transport: &Arc<TransportHandle>, after_seq: u64) -> Vec<String> {
@@ -565,6 +669,34 @@ fn check_eval_budget(requested: Duration, deadline: &EvalDeadline) -> Result<(),
         }
     }
     Ok(())
+}
+
+fn remaining_eval_budget(deadline: &EvalDeadline) -> Result<Duration, SteelErr> {
+    let guard = deadline.lock().map_err(|_| {
+        SteelErr::new(
+            ErrorKind::Generic,
+            "eval deadline mutex poisoned".to_string(),
+        )
+    })?;
+    let Some(dl) = *guard else {
+        return Ok(Duration::from_secs(3600));
+    };
+    let remaining = dl.saturating_duration_since(Instant::now());
+    if remaining.is_zero() {
+        return Err(SteelErr::new(
+            ErrorKind::Generic,
+            "scheme_eval budget exhausted; increase --scheme-eval-timeout-secs".to_string(),
+        ));
+    }
+    Ok(remaining)
+}
+
+fn format_duration(duration: Duration) -> String {
+    if duration.as_secs() > 0 {
+        format!("{}s", duration.as_secs())
+    } else {
+        format!("{}ms", duration.as_millis())
+    }
 }
 
 /// For default (non-user-supplied) timeouts, silently clamp to the
