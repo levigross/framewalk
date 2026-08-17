@@ -21,7 +21,20 @@ in `framewalk://reference/session`. For the workflow read
 {"name": "target_select", "arguments": {"transport": "remote", "parameters": "localhost:3333"}}
 ```
 
-**Related:** `target_disconnect`, `target_download`, `framewalk://guide/attach`
+**Availability:** unlike the rest of this category, `target_select` is an
+operator tool and is advertised in **every** mode (`full`, `core`,
+`scheme`). It is the primitive that gives `reconnect_target` something to
+reconnect to, so restricting it to `full` would leave the recovery tool
+unusable in the other modes.
+
+If the stub rejects non-stop mode, framewalk disables non-stop and retries
+once; the downgrade is surfaced as a `warning:` entry via `drain_events`.
+
+**Equivalents:** `(target-remote "localhost:3333")` and
+`(target-extended-remote ...)` inside `scheme_eval`, or the
+`--connect remote:localhost:3333` startup flag.
+
+**Related:** `target_disconnect`, `target_download`, `reconnect_target`, `framewalk://guide/attach`
 
 ---
 

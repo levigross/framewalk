@@ -7,7 +7,7 @@
 use framewalk_mi_codec::{MiCommand, Value, encode_command};
 use framewalk_mi_protocol::{CommandOutcome, Event, StoppedReason, TargetState};
 use rmcp::ErrorData as McpError;
-use rmcp::model::{CallToolResult, Content};
+use rmcp::model::{CallToolResult, ContentBlock};
 use serde::Serialize;
 
 use framewalk_mi_transport::{EventSeq, TransportError, TransportHandle};
@@ -17,7 +17,7 @@ use crate::types::symbol;
 
 /// Turn a `CommandOutcome` into a `CallToolResult` with a single text
 /// content block containing compact JSON. MCP does not define a native
-/// structured-JSON content type for tool outputs, so `Content::text`
+/// structured-JSON content type for tool outputs, so `ContentBlock::text`
 /// with a JSON string is the standard approach. Compact (not
 /// pretty-printed) to minimise token consumption when the response is
 /// fed back into an LLM context window.
@@ -187,6 +187,109 @@ pub(crate) async fn downgrade_non_stop_and_retry(
         .map_err(|err| transport_error_to_mcp(&err))
 }
 
+/// Run a `-target-select`, applying every part of framewalk's connect
+/// policy: the one-shot non-stop downgrade retry, memoising a successful
+/// selection so `reconnect_target` has something to reconnect to, and the
+/// best-effort vmlinux probe for remote-class transports.
+///
+/// Shared by the `target_select` tool and the `--connect` startup path so
+/// a target connected at boot behaves identically to one connected by a
+/// later tool call — same recovery, same memoisation, same detection.
+pub(crate) async fn perform_target_select(
+    transport: &std::sync::Arc<TransportHandle>,
+    background_tasks: &crate::background::BackgroundTasks,
+    transport_name: &str,
+    parameters: &str,
+) -> Result<CommandOutcome, McpError> {
+    let rebuild = || {
+        MiCommand::new("target-select")
+            .parameter(transport_name)
+            .parameter(parameters)
+    };
+
+    let initial = transport
+        .submit(rebuild())
+        .await
+        .map_err(|err| transport_error_to_mcp(&err))?;
+
+    let outcome = match initial {
+        CommandOutcome::Error { ref msg, .. } if is_non_stop_mismatch(msg) => {
+            downgrade_non_stop_and_retry(transport, msg, &rebuild).await?
+        }
+        other => other,
+    };
+
+    remember_successful_target_select_command(transport, &rebuild(), &outcome);
+
+    // Best-effort vmlinux detection, gated to remote-class transports so
+    // local/native connects pay no extra cost.
+    if matches!(
+        outcome,
+        CommandOutcome::Done(_) | CommandOutcome::Connected(_)
+    ) && is_remote_target_transport(transport_name)
+    {
+        background_tasks.spawn(spawn_vmlinux_probe(std::sync::Arc::clone(transport)));
+    }
+
+    Ok(outcome)
+}
+
+/// Connect to the `--connect` target during startup.
+///
+/// Public wrapper over [`perform_target_select`] for `main.rs`, which is a
+/// separate binary crate and so cannot reach the crate-private helpers.
+/// Both a malformed spec and a `^error` from GDB are reported as errors —
+/// `main.rs` treats them as fatal, since booting into a session that
+/// silently failed to connect is worse than exiting.
+pub async fn connect_startup_target(
+    transport: &std::sync::Arc<TransportHandle>,
+    background_tasks: &crate::background::BackgroundTasks,
+    spec: &str,
+) -> Result<(), String> {
+    let (transport_name, parameters) = parse_connect_spec(spec)?;
+
+    let outcome = perform_target_select(transport, background_tasks, transport_name, parameters)
+        .await
+        .map_err(|err| format!("`-target-select {transport_name} {parameters}` failed: {err}"))?;
+
+    match outcome {
+        CommandOutcome::Done(_) | CommandOutcome::Connected(_) => Ok(()),
+        CommandOutcome::Error { msg, .. } => Err(format!(
+            "gdb rejected `-target-select {transport_name} {parameters}`: {msg}"
+        )),
+        other => Err(format!(
+            "unexpected outcome from `-target-select {transport_name} {parameters}`: {other:?}"
+        )),
+    }
+}
+
+/// Split a `--connect` value into its `-target-select` transport name and
+/// transport parameters.
+///
+/// The value is `<transport>:<parameters>` and splits on the **first**
+/// colon only, because the parameters half is itself usually
+/// `host:port` — `remote:localhost:1234` must yield
+/// `("remote", "localhost:1234")`, not `("remote", "localhost")`.
+pub(crate) fn parse_connect_spec(spec: &str) -> Result<(&str, &str), String> {
+    let Some((transport, parameters)) = spec.split_once(':') else {
+        return Err(format!(
+            "expected `<transport>:<parameters>` (e.g. `remote:localhost:1234`), got {spec:?}"
+        ));
+    };
+
+    let transport = transport.trim();
+    let parameters = parameters.trim();
+
+    if transport.is_empty() {
+        return Err(format!("transport name is empty in {spec:?}"));
+    }
+    if parameters.is_empty() {
+        return Err(format!("transport parameters are empty in {spec:?}"));
+    }
+
+    Ok((transport, parameters))
+}
+
 /// Recognise the small set of `-target-select` transport names that
 /// connect to a remote stub. These are the only situations where a
 /// vmlinux-shaped target is plausible, so the probe is gated to them
@@ -303,9 +406,9 @@ pub(crate) fn remember_successful_raw_target_select(
 pub(crate) fn json_tool_result(value: &serde_json::Value, is_error: bool) -> CallToolResult {
     let text = serde_json::to_string(value).unwrap_or_else(|_| value.to_string());
     if is_error {
-        CallToolResult::error(vec![Content::text(text)])
+        CallToolResult::error(vec![ContentBlock::text(text)])
     } else {
-        CallToolResult::success(vec![Content::text(text)])
+        CallToolResult::success(vec![ContentBlock::text(text)])
     }
 }
 
@@ -629,6 +732,48 @@ fn encode_mi_command(command: &MiCommand) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_connect_spec_splits_on_first_colon_only() {
+        // The parameters half is itself `host:port`, so a naive split on
+        // every colon would truncate the port.
+        assert_eq!(
+            parse_connect_spec("remote:localhost:1234"),
+            Ok(("remote", "localhost:1234"))
+        );
+        assert_eq!(
+            parse_connect_spec("extended-remote:host.example:9999"),
+            Ok(("extended-remote", "host.example:9999"))
+        );
+    }
+
+    #[test]
+    fn parse_connect_spec_accepts_non_host_port_parameters() {
+        assert_eq!(
+            parse_connect_spec("remote:/dev/ttyUSB0"),
+            Ok(("remote", "/dev/ttyUSB0"))
+        );
+    }
+
+    #[test]
+    fn parse_connect_spec_trims_surrounding_whitespace() {
+        assert_eq!(
+            parse_connect_spec("  remote : localhost:1234  "),
+            Ok(("remote", "localhost:1234"))
+        );
+    }
+
+    #[test]
+    fn parse_connect_spec_rejects_malformed_input() {
+        // No colon at all — cannot tell transport from parameters.
+        assert!(parse_connect_spec("remote").is_err());
+        // Empty halves are rejected rather than forwarded to gdb as a
+        // syntactically valid but meaningless `-target-select`.
+        assert!(parse_connect_spec(":localhost:1234").is_err());
+        assert!(parse_connect_spec("remote:").is_err());
+        assert!(parse_connect_spec("   :   ").is_err());
+        assert!(parse_connect_spec("").is_err());
+    }
 
     #[test]
     fn encode_mi_command_matches_mi_wire_format() {

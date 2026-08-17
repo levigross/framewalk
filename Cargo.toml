@@ -11,7 +11,11 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+# Floor set by rmcp 3.x (and its darling 0.24 dependency), both of which
+# declare rust-version 1.88. The resolver-v3 MSRV check enforces this, so
+# it must track the highest dependency MSRV or `cargo update` silently
+# holds crates back.
+rust-version = "1.88"
 license = "Apache-2.0"
 repository = "https://github.com/levigross/framewalk"
 authors = ["Levi Gross <levi@levigross.com>"]
@@ -66,7 +70,7 @@ tokio = { version = "1", features = [
 # rmcp: official Rust MCP SDK. Feature-gated to stdio-only (server, macros,
 # schemars) so we avoid pulling in the SSE/HTTP/WebSocket transports — which
 # would drag in hyper/rustls/crypto stacks and blow up the static-musl build.
-rmcp = { version = "1.5", features = ["server", "transport-io", "macros"] }
+rmcp = { version = "3.1", features = ["server", "transport-io", "macros"] }
 # serde + serde_json + schemars: tool input schemas. rmcp re-exports these
 # but pinning them here keeps the dep graph visible.
 serde = { version = "1", features = ["derive"] }

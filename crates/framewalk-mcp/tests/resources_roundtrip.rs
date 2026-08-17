@@ -104,10 +104,10 @@ async fn drive_server(messages: &[&str]) -> Vec<serde_json::Value> {
         // to close stdin immediately.  Without this the writer would
         // park forever waiting for a signal the reader will never
         // send.
-        if expected_ids.is_empty() {
-            if let Some(tx) = done_tx.take() {
-                tx.send(()).ok();
-            }
+        if expected_ids.is_empty()
+            && let Some(tx) = done_tx.take()
+        {
+            tx.send(()).ok();
         }
 
         while let Ok(Some(line)) = reader.next_line().await {
@@ -130,10 +130,11 @@ async fn drive_server(messages: &[&str]) -> Vec<serde_json::Value> {
             // exits.  After this point any further lines we read
             // (trailing notifications, final logs) are still
             // accumulated into `out` for the caller to inspect.
-            if done_tx.is_some() && expected_ids.iter().all(|id| seen.contains(id)) {
-                if let Some(tx) = done_tx.take() {
-                    tx.send(()).ok();
-                }
+            if done_tx.is_some()
+                && expected_ids.iter().all(|id| seen.contains(id))
+                && let Some(tx) = done_tx.take()
+            {
+                tx.send(()).ok();
             }
         }
         out

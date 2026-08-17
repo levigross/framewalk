@@ -19,16 +19,16 @@ use clap::Parser;
 ///
 /// `Scheme` keeps the tool-definition payload minimal by registering
 /// `scheme_eval` plus a small operator surface (`interrupt_target`,
-/// `target_state`, `drain_events`, `reconnect_target`).
+/// `target_state`, `drain_events`, `target_select`, `reconnect_target`).
 #[derive(Debug, Clone, Copy, Default, clap::ValueEnum)]
 pub enum Mode {
     /// All semantic GDB tools plus `scheme_eval`.
-    #[default]
     #[value(alias = "standard")]
     Full,
     /// Curated MI-first subset plus the raw and Scheme escape hatches.
     Core,
     /// Only `scheme_eval` — minimal context-window footprint.
+    #[default]
     Scheme,
 }
 
@@ -46,13 +46,27 @@ pub struct Config {
     #[arg(long)]
     pub cwd: Option<PathBuf>,
 
-    /// Operating mode. `full` exposes the complete MI-first surface;
+    /// Operating mode. `scheme` exposes `scheme_eval` plus the operator
+    /// escape hatches; `full` exposes the complete MI-first surface;
     /// `core` exposes the common subset plus `mi_raw_command` and
-    /// `scheme_eval`; `scheme` exposes `scheme_eval` plus the operator
-    /// escape hatches. The legacy value `standard` is accepted as an
+    /// `scheme_eval`. The legacy value `standard` is accepted as an
     /// alias for `full`.
-    #[arg(long, env = "FRAMEWALK_MODE", default_value = "full")]
+    #[arg(long, env = "FRAMEWALK_MODE", default_value = "scheme")]
     pub mode: Mode,
+
+    /// Connect to a remote target during startup, before the first tool
+    /// call. Format is `<transport>:<parameters>`, e.g.
+    /// `remote:localhost:1234` or `extended-remote:host.example:9999`;
+    /// only the first colon separates the two halves, so `host:port`
+    /// parameters survive intact.
+    ///
+    /// Equivalent to calling the `target_select` tool immediately after
+    /// startup — same non-stop downgrade retry, same vmlinux probe — but
+    /// it means `reconnect_target` has a valid selection from the very
+    /// first tool call. A failure here is fatal: booting into a session
+    /// that silently did not connect is worse than exiting.
+    #[arg(long, env = "FRAMEWALK_CONNECT", value_name = "TRANSPORT:PARAMS")]
+    pub connect: Option<String>,
 
     /// Enable GDB non-stop mode during session bootstrap.  Defaults to
     /// `true`.  Pass `--no-non-stop` when connecting to remote stubs

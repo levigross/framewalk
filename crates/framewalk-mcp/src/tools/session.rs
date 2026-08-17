@@ -17,10 +17,10 @@ framewalk_tool_block! {
             let cursor = self.transport_handle().event_cursor();
             let outcome = self.submit_command(MiCommand::new("gdb-version")).await?;
             let mut payload = outcome_to_json(&outcome);
-            if let Some(version) = collect_console_text_since(self.transport_handle(), cursor) {
-                if let Some(obj) = payload.as_object_mut() {
-                    obj.insert("version".into(), serde_json::Value::String(version));
-                }
+            if let Some(version) = collect_console_text_since(self.transport_handle(), cursor)
+                && let Some(obj) = payload.as_object_mut()
+            {
+                obj.insert("version".into(), serde_json::Value::String(version));
             }
             Ok(json_tool_result(
                 &payload,

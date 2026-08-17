@@ -78,10 +78,10 @@ async fn drive_server_with_args(
             if let Ok(v) = serde_json::from_str::<Value>(&line) {
                 out.push(v);
             }
-            if out.len() >= expected_replies {
-                if let Some(tx) = done_tx.take() {
-                    tx.send(()).ok();
-                }
+            if out.len() >= expected_replies
+                && let Some(tx) = done_tx.take()
+            {
+                tx.send(()).ok();
             }
         }
         out
@@ -141,7 +141,7 @@ async fn full_mode_includes_scheme_eval_and_all_tools() {
     let mut msgs = init_messages();
     msgs.push(json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}).to_string());
 
-    let replies = drive_server_with_args(&[], &msgs, 2).await;
+    let replies = drive_server_with_args(&["--mode", "full"], &msgs, 2).await;
     let list = find_reply(&replies, 2);
     let names = tool_names_from_list_reply(list);
 
@@ -169,7 +169,7 @@ async fn full_mode_includes_scheme_eval_and_all_tools() {
 async fn core_mode_exposes_curated_subset_plus_escape_hatches() {
     let mut full_msgs = init_messages();
     full_msgs.push(json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}).to_string());
-    let full_replies = drive_server_with_args(&[], &full_msgs, 2).await;
+    let full_replies = drive_server_with_args(&["--mode", "full"], &full_msgs, 2).await;
     let full_names = tool_names_from_list_reply(find_reply(&full_replies, 2));
 
     let mut core_msgs = init_messages();
@@ -234,6 +234,26 @@ async fn standard_alias_maps_to_full_mode() {
 
 #[tokio::test]
 #[ignore = "spawns real gdb via the mcp binary; run with --ignored"]
+async fn default_mode_is_scheme() {
+    let mut msgs = init_messages();
+    msgs.push(json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}).to_string());
+
+    let default_replies = drive_server_with_args(&[], &msgs, 2).await;
+    let default_names = tool_names_from_list_reply(find_reply(&default_replies, 2));
+
+    let scheme_replies = drive_server_with_args(&["--mode", "scheme"], &msgs, 2).await;
+    let scheme_names = tool_names_from_list_reply(find_reply(&scheme_replies, 2));
+
+    let default_set: BTreeSet<_> = default_names.into_iter().collect();
+    let scheme_set: BTreeSet<_> = scheme_names.into_iter().collect();
+    assert_eq!(
+        default_set, scheme_set,
+        "default mode should expose the same tool set as `scheme`"
+    );
+}
+
+#[tokio::test]
+#[ignore = "spawns real gdb via the mcp binary; run with --ignored"]
 async fn scheme_mode_exposes_scheme_eval_plus_operator_tools() {
     let mut msgs = init_messages();
     msgs.push(json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}).to_string());
@@ -246,6 +266,10 @@ async fn scheme_mode_exposes_scheme_eval_plus_operator_tools() {
         "interrupt_target".to_string(),
         "target_state".to_string(),
         "drain_events".to_string(),
+        // `target_select` is an operator tool precisely so scheme mode can
+        // establish a connection; without it `reconnect_target` has nothing
+        // to reconnect to and no other advertised tool could fix that.
+        "target_select".to_string(),
         "reconnect_target".to_string(),
         "scheme_eval".to_string(),
     ]
@@ -444,7 +468,7 @@ async fn gdb_version_tool_returns_banner_via_mcp() {
         .to_string(),
     );
 
-    let replies = drive_server_with_args(&[], &msgs, 2).await;
+    let replies = drive_server_with_args(&["--mode", "full"], &msgs, 2).await;
     let call = find_reply(&replies, 2);
 
     assert_ne!(
@@ -519,11 +543,13 @@ async fn full_mode_tool_count_is_previous_plus_one() {
     let mut msgs = init_messages();
     msgs.push(json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}).to_string());
 
-    let replies = drive_server_with_args(&[], &msgs, 2).await;
+    let replies = drive_server_with_args(&["--mode", "full"], &msgs, 2).await;
     let list = find_reply(&replies, 2);
     let names = tool_names_from_list_reply(list);
 
-    // Baseline MI3 tools (124) + operator escape hatches (4) + scheme_eval = 129 in full mode.
+    // Baseline MI3 tools (123) + operator escape hatches (5) + scheme_eval = 129 in full mode.
+    // `target_select` counts under "operator" rather than "MI3" because it
+    // lives in the operator block so every mode can reach it.
     // If this number drifts because a new tool was added, update the
     // constant here *and* in the matching assertion in scheme mode
     // below (if any); the test's intent is "scheme_eval is always
@@ -536,7 +562,7 @@ async fn full_mode_tool_count_is_previous_plus_one() {
     assert_eq!(
         names.len(),
         129,
-        "full mode should have exactly 129 tools (124 MI3 + 4 operator tools + scheme_eval), got {}: {names:?}",
+        "full mode should have exactly 129 tools (123 MI3 + 5 operator tools + scheme_eval), got {}: {names:?}",
         names.len()
     );
 }

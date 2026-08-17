@@ -183,7 +183,7 @@ fn truncate_display_string(mut rendered: String) -> String {
 }
 
 /// Serialise the results of a Scheme evaluation into a string suitable
-/// for an MCP `Content::text` block.
+/// for an MCP `ContentBlock::text` block.
 ///
 /// Multiple top-level values (one per expression) are separated by
 /// newlines.  Output is truncated to [`MAX_OUTPUT_BYTES`] with an

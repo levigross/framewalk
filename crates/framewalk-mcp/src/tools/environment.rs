@@ -156,61 +156,8 @@ framewalk_tool_block! {
     specs: TARGET_TOOL_SPECS,
     category: "target",
     profiles: FULL_ONLY,
-    names: [target_select, target_download, target_disconnect, target_flash_erase];
+    names: [target_download, target_disconnect, target_flash_erase];
     items: {
-        #[tool(description = "Connect to a remote target (e.g. gdbserver). \
-                              If the stub rejects non-stop mode, framewalk \
-                              automatically disables non-stop and retries once; \
-                              the downgrade is surfaced as a `warning:` entry \
-                              visible via `drain-events`.")]
-        async fn target_select(
-            &self,
-            Parameters(args): Parameters<target::TargetSelectArgs>,
-        ) -> Result<CallToolResult, McpError> {
-            let transport_name = args.transport;
-            let parameters = args.parameters;
-            let rebuild = || {
-                MiCommand::new("target-select")
-                    .parameter(transport_name.clone())
-                    .parameter(parameters.clone())
-            };
-
-            let initial = self.submit_command(rebuild()).await?;
-            let outcome = match initial {
-                framewalk_mi_protocol::CommandOutcome::Error { ref msg, .. }
-                    if crate::server_helpers::is_non_stop_mismatch(msg) =>
-                {
-                    crate::server_helpers::downgrade_non_stop_and_retry(
-                        self.transport_handle(),
-                        msg,
-                        &rebuild,
-                    )
-                    .await?
-                }
-                other => other,
-            };
-
-            crate::server_helpers::remember_successful_target_select_command(
-                self.transport_handle(),
-                &rebuild(),
-                &outcome,
-            );
-
-            // Best-effort vmlinux detection, gated to remote-class
-            // transports so local/native connects pay no extra cost.
-            if matches!(
-                outcome,
-                framewalk_mi_protocol::CommandOutcome::Done(_)
-                    | framewalk_mi_protocol::CommandOutcome::Connected(_)
-            ) && crate::server_helpers::is_remote_target_transport(&transport_name)
-            {
-                let handle = crate::server_helpers::spawn_vmlinux_probe(self.transport_arc());
-                self.background_tasks().spawn(handle);
-            }
-
-            Ok(crate::server_helpers::format_outcome(&outcome))
-        }
-
         #[tool(description = "Download the executable to the remote target.")]
         async fn target_download(&self) -> Result<CallToolResult, McpError> {
             self.submit_as_tool_result(MiCommand::new("target-download"))

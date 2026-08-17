@@ -977,6 +977,16 @@ mod tests {
             ("(attach 42)", "-target-attach 42"),
             (r#"(attach "42")"#, "-target-attach 42"),
             ("(detach)", "-target-detach"),
+            // Remote targets
+            (
+                r#"(target-remote "localhost:1234")"#,
+                "-target-select remote localhost:1234",
+            ),
+            (
+                r#"(target-extended-remote "host.example:9999")"#,
+                "-target-select extended-remote host.example:9999",
+            ),
+            ("(target-disconnect)", "-target-disconnect"),
             // Execution
             ("(run)", "-exec-run"),
             ("(cont)", "-exec-continue"),

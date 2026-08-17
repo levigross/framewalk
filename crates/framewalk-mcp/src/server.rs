@@ -15,7 +15,7 @@ use rmcp::{
     handler::server::router::tool::ToolRouter,
     model::{
         CallToolResult, Implementation, ListResourcesResult, PaginatedRequestParams,
-        ProtocolVersion, ReadResourceRequestParams, ReadResourceResult, ServerCapabilities,
+        ProtocolVersion, ReadResourceRequestParams, ReadResourceResponse, ServerCapabilities,
         ServerInfo,
     },
     service::{RequestContext, RoleServer},
@@ -189,11 +189,13 @@ impl ServerHandler for FramewalkMcp {
             Mode::Scheme => "\
                 framewalk in Scheme mode exposes GDB/MI v3 primarily \
                 through `scheme_eval`, plus operator escape hatches: \
-                `interrupt_target`, `target_state`, `drain_events`, and \
-                `reconnect_target`. Read `framewalk://guide/scheme` \
+                `interrupt_target`, `target_state`, `drain_events`, \
+                `target_select`, and `reconnect_target`. Read \
+                `framewalk://guide/scheme` \
                 first. The prelude provides wrappers: (load-file path), \
                 (set-breakpoint loc), (run), (cont-and-wait), \
-                (backtrace), (inspect expr), (wait-for-stop). See \
+                (backtrace), (inspect expr), (wait-for-stop), \
+                (target-remote \"host:port\"). See \
                 `framewalk://reference/scheme` for the full prelude \
                 function list and `framewalk://recipe/*` for worked \
                 examples. Engine state persists across calls."
@@ -206,7 +208,14 @@ impl ServerHandler for FramewalkMcp {
                 .enable_resources()
                 .build(),
         )
-        .with_protocol_version(ProtocolVersion::V_2025_11_25)
+        // This is the *fallback* version, not a ceiling: rmcp's default
+        // `supported_protocol_versions()` is `ProtocolVersion::KNOWN_VERSIONS`,
+        // and `initialize` echoes whatever the client asks for as long as it
+        // is in that list. So this value is only what we answer a client that
+        // requests a version rmcp does not recognise. Set to 2026-07-28 to
+        // prefer the newest spec revision the SDK knows; note rmcp's own
+        // `LATEST` is still 2025-11-25, so this opts ahead of the SDK default.
+        .with_protocol_version(ProtocolVersion::V_2026_07_28)
         .with_server_info(
             Implementation::new("framewalk-mcp", env!("CARGO_PKG_VERSION"))
                 .with_title("framewalk — GDB/MI MCP server"),
@@ -226,8 +235,11 @@ impl ServerHandler for FramewalkMcp {
         &self,
         request: ReadResourceRequestParams,
         _context: RequestContext<RoleServer>,
-    ) -> Result<ReadResourceResult, McpError> {
-        resources::read_resource(&request.uri)
+    ) -> Result<ReadResourceResponse, McpError> {
+        // framewalk's resources are static documentation baked into the
+        // binary, so a read always resolves in one round trip. MRTR
+        // (SEP-2322) `InputRequired` never applies here.
+        resources::read_resource(&request.uri).map(ReadResourceResponse::Complete)
     }
 }
 

@@ -11,7 +11,7 @@ framewalk_tool_block! {
     specs: OPERATOR_TOOL_SPECS,
     category: "operator",
     profiles: FULL_CORE,
-    names: [interrupt_target, target_state, drain_events, reconnect_target];
+    names: [interrupt_target, target_state, drain_events, target_select, reconnect_target];
     items: {
         #[tool(description = "Interrupt all running target threads immediately, even in scheme mode.")]
         async fn interrupt_target(&self) -> Result<CallToolResult, McpError> {
@@ -39,6 +39,32 @@ framewalk_tool_block! {
                     .unwrap_or_else(|_| serde_json::json!({"cursor": self.transport_handle().event_cursor(), "events": []})),
                 false,
             ))
+        }
+
+        // Lives in the operator block rather than the `target` category so
+        // it is advertised in every mode. `reconnect_target` is useless
+        // until some call has established a selection to reconnect to, and
+        // in scheme mode no other advertised tool could do that.
+        #[tool(description = "Connect to a remote target (e.g. gdbserver): \
+                              transport is `remote`, `extended-remote`, `sim`, \
+                              etc. and parameters is the transport argument such \
+                              as `localhost:1234`. If the stub rejects non-stop \
+                              mode, framewalk automatically disables non-stop and \
+                              retries once; the downgrade is surfaced as a \
+                              `warning:` entry visible via `drain-events`.")]
+        async fn target_select(
+            &self,
+            Parameters(args): Parameters<target::TargetSelectArgs>,
+        ) -> Result<CallToolResult, McpError> {
+            let outcome = crate::server_helpers::perform_target_select(
+                &self.transport_arc(),
+                self.background_tasks(),
+                &args.transport,
+                &args.parameters,
+            )
+            .await?;
+
+            Ok(crate::server_helpers::format_outcome(&outcome))
         }
 
         #[tool(description = "Disconnect and reconnect to the most recently selected remote target, preserving the current GDB session state.")]

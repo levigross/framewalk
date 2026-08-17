@@ -12,7 +12,7 @@ use std::time::Duration;
 use rmcp::ErrorData as McpError;
 use rmcp::handler::server::router::tool::ToolRoute;
 use rmcp::handler::server::tool::{parse_json_object, schema_for_type};
-use rmcp::model::{CallToolResult, Content, Tool};
+use rmcp::model::{CallToolResponse, CallToolResult, ContentBlock, Tool};
 
 use crate::scheme::worker::SchemeHandle;
 use crate::server::FramewalkMcp;
@@ -67,7 +67,9 @@ Prelude helpers (Scheme):
   (gdb-version), (run), (step), (next), (cont), (finish), (interrupt),
   (set-breakpoint loc), (set-temp-breakpoint loc), (delete-breakpoint id),
   (backtrace), (inspect expr), (list-locals), (list-threads),
-  (load-file path), (until loc),
+  (load-file path), (until loc), (attach pid), (detach),
+  (target-remote \"host:port\"), (target-extended-remote \"host:port\"),
+  (target-disconnect),
   (result-field name result) — extract a unique field from a result,
   (result-fields name result) — extract all matching fields in order,
   (step-n n) — step n times and collect results,
@@ -126,12 +128,17 @@ pub(crate) fn scheme_eval_route(scheme: Arc<SchemeHandle>) -> ToolRoute<Framewal
                 None => None,
             };
 
-            match scheme.eval(args.code, budget, args.include_streams).await {
-                Ok(reply) => Ok(CallToolResult::success(vec![Content::text(
-                    render_reply_json(&reply, args.include_streams),
-                )])),
-                Err(err) => Ok(CallToolResult::error(vec![Content::text(err)])),
-            }
+            // The eval runs to completion inside this call — framewalk never
+            // parks a scheme_eval as an MRTR/task response — so every outcome
+            // maps onto `CallToolResponse::Complete`.
+            let result = match scheme.eval(args.code, budget, args.include_streams).await {
+                Ok(reply) => CallToolResult::success(vec![ContentBlock::text(render_reply_json(
+                    &reply,
+                    args.include_streams,
+                ))]),
+                Err(err) => CallToolResult::error(vec![ContentBlock::text(err)]),
+            };
+            Ok(CallToolResponse::Complete(result))
         })
     })
 }

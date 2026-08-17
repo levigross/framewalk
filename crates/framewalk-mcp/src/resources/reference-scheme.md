@@ -4,7 +4,8 @@ framewalk-mcp's Scheme mode exposes GDB primarily through a Steel
 Scheme scripting layer. Instead of a large menu of per-command MCP
 tools, there is one composition tool — `scheme_eval` — plus a small
 operator surface (`interrupt_target`, `target_state`, `drain_events`,
-`reconnect_target`). The engine is preloaded with a prelude that wraps
+`target_select`, `reconnect_target`). The engine is preloaded with a
+prelude that wraps
 the most common MI commands as Scheme functions.
 
 Use Scheme mode when you want to compose multi-step workflows in a
@@ -84,6 +85,24 @@ Attach to a running process. `pid` may be a number or a numeric string.
 
 #### `(detach)`
 Detach from the currently attached process.
+
+#### `(target-remote where)`
+Connect to a remote stub (gdbserver, QEMU, JTAG probe). `where` is the
+transport argument, e.g. `"localhost:1234"` or `"/dev/ttyUSB0"`. This is
+a one-shot connection bound to the single target the stub was launched
+against.
+
+#### `(target-extended-remote where)`
+Same, but leaves the stub alive after detach so you can `(attach pid)` to
+further processes on the same host.
+
+#### `(target-disconnect)`
+Disconnect from the remote target, leaving the remote process running.
+
+A successful connect through either helper is memoised, so the
+`reconnect_target` tool can re-establish it after a stub restart. The
+`target_select` tool and the `--connect` startup flag are equivalent
+entry points.
 
 ### Execution control
 
