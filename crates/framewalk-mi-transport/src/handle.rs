@@ -179,10 +179,10 @@ impl TransportHandle {
         &self,
         timeout: Duration,
     ) -> Result<Option<(EventSeq, StoppedEvent)>, TransportError> {
-        if self.snapshot().target.is_stopped() {
-            if let Some(stopped) = self.shared.latest_stopped() {
-                return Ok(Some(stopped));
-            }
+        if self.snapshot().target.is_stopped()
+            && let Some(stopped) = self.shared.latest_stopped()
+        {
+            return Ok(Some(stopped));
         }
 
         self.next_stop_after(self.event_cursor(), timeout).await

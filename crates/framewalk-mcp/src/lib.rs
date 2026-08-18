@@ -20,3 +20,4 @@ pub use background::BackgroundTasks;
 pub use config::Config;
 pub use scheme::{SchemeHandle, SchemeSettings};
 pub use server::FramewalkMcp;
+pub use server_helpers::connect_startup_target;

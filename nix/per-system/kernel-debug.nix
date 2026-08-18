@@ -51,12 +51,23 @@ let
       RANDOMIZE_BASE = lib.mkForce no;
 
       # ── Crash provocation (LKDTM) ───────────────────────────────
-      # Optional: nixpkgs's resolver occasionally drops LKDTM after a
-      # kernel bump (deps shift in lib/Kconfig.debug). When that happens
-      # we get a warning instead of a build failure, and the init script
-      # at the bottom of this file already detects /sys/kernel/debug/
-      # provoke-crash being absent. Reproducers from syzbot don't need
-      # LKDTM — it's just a convenience for hand-triggered crashes.
+      # LKDTM lives inside the `if RUNTIME_TESTING_MENU` block in
+      # lib/Kconfig.debug, and nixpkgs's common-config.nix sets that menu
+      # gate to `n` to keep runtime tests out of production kernels. With
+      # the gate off, LKDTM drops out of the config entirely (not even
+      # `# CONFIG_LKDTM is not set` appears) and our request for it silently
+      # no-ops — hence `option yes` (warn, don't fail the build) plus the
+      # init script's runtime check for a missing /sys/kernel/debug/
+      # provoke-crash. syzbot reproducers don't need LKDTM; it's only a
+      # convenience for hand-triggered crashes.
+      #
+      # Do NOT try to force the gate open (`RUNTIME_TESTING_MENU =
+      # lib.mkForce yes`). This kernel is built with nixpkgs autoModules,
+      # so opening the menu auto-enables every tristate test inside it as
+      # `=m` — including TEST_KALLSYMS, whose gen_test_kallsyms.sh build
+      # step fails in the sandbox (Error 126) and pulls in a pile of never-
+      # loaded test modules. Verified 2026-07: the force-open approach
+      # breaks the kernel build, which is why LKDTM stays best-effort.
       LKDTM = lib.kernel.option yes;
 
       # ── Memory error detection (KASAN) ───────────────────────────

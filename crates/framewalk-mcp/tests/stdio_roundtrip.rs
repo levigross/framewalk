@@ -46,7 +46,7 @@ fn framewalk_mcp_binary() -> &'static str {
 /// behaviour whenever a handler ran slower than the fudge factor —
 /// see the history on `resources_roundtrip.rs` for the concrete
 /// failure that motivated this shape.
-async fn drive_server(messages: &[&str]) -> Vec<serde_json::Value> {
+async fn drive_server_with_args(args: &[&str], messages: &[&str]) -> Vec<serde_json::Value> {
     // Pre-compute the set of request IDs that should receive a
     // reply.  Notifications (no `id` field) are not expected to
     // produce one.  Malformed input is treated as "no id" — the
@@ -59,6 +59,7 @@ async fn drive_server(messages: &[&str]) -> Vec<serde_json::Value> {
         .collect();
 
     let mut child = Command::new(framewalk_mcp_binary())
+        .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -96,10 +97,10 @@ async fn drive_server(messages: &[&str]) -> Vec<serde_json::Value> {
 
         // Nothing to wait for — release the writer immediately so
         // it can drop stdin and let the server shut down.
-        if expected_ids.is_empty() {
-            if let Some(tx) = done_tx.take() {
-                tx.send(()).ok();
-            }
+        if expected_ids.is_empty()
+            && let Some(tx) = done_tx.take()
+        {
+            tx.send(()).ok();
         }
 
         while let Ok(Some(line)) = reader.next_line().await {
@@ -122,10 +123,11 @@ async fn drive_server(messages: &[&str]) -> Vec<serde_json::Value> {
             // loop exits.  Further trailing lines (log records,
             // unsolicited notifications) are still collected into
             // `out` so callers can inspect them.
-            if done_tx.is_some() && expected_ids.iter().all(|id| seen.contains(id)) {
-                if let Some(tx) = done_tx.take() {
-                    tx.send(()).ok();
-                }
+            if done_tx.is_some()
+                && expected_ids.iter().all(|id| seen.contains(id))
+                && let Some(tx) = done_tx.take()
+            {
+                tx.send(()).ok();
             }
         }
         out
@@ -148,18 +150,21 @@ fn find_reply(replies: &[serde_json::Value], id: i64) -> &serde_json::Value {
 }
 
 // ---------------------------------------------------------------------------
-// Test 1: initialize + tools/list publishes every expected tool
+// Test 1: initialize + tools/list publishes every expected full-mode tool
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[ignore = "spawns real gdb via the mcp binary; run with --ignored"]
 #[allow(clippy::too_many_lines)]
 async fn initialize_and_list_tools() {
-    let replies = drive_server(&[
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
-        r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
-        r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#,
-    ])
+    let replies = drive_server_with_args(
+        &["--mode", "full"],
+        &[
+            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
+            r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
+            r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#,
+        ],
+    )
     .await;
 
     // Initialize succeeded with the right server name.
@@ -363,11 +368,14 @@ async fn initialize_and_list_tools() {
 #[tokio::test]
 #[ignore = "spawns real gdb via the mcp binary; run with --ignored"]
 async fn tools_call_gdb_version() {
-    let replies = drive_server(&[
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
-        r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
-        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"gdb_version","arguments":{}}}"#,
-    ])
+    let replies = drive_server_with_args(
+        &["--mode", "full"],
+        &[
+            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
+            r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
+            r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"gdb_version","arguments":{}}}"#,
+        ],
+    )
     .await;
 
     let call = find_reply(&replies, 2);
@@ -397,11 +405,14 @@ async fn tools_call_gdb_version() {
 #[tokio::test]
 #[ignore = "spawns real gdb via the mcp binary; run with --ignored"]
 async fn raw_mi_command_rejects_shell_by_default() {
-    let replies = drive_server(&[
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
-        r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
-        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"mi_raw_command","arguments":{"command":"-interpreter-exec console \"shell ls\""}}}"#,
-    ])
+    let replies = drive_server_with_args(
+        &["--mode", "full"],
+        &[
+            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
+            r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
+            r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"mi_raw_command","arguments":{"command":"-interpreter-exec console \"shell ls\""}}}"#,
+        ],
+    )
     .await;
 
     let call = find_reply(&replies, 2);
@@ -413,5 +424,71 @@ async fn raw_mi_command_rejects_shell_by_default() {
     assert!(
         rejected,
         "mi_raw_command with shell pivot should be rejected: {call:#?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Test 4: `--connect` fails fast rather than serving a half-connected
+// session. Booting into a session that silently did not connect is worse
+// than exiting, so both a malformed spec and an unreachable stub must exit
+// non-zero with the reason on stderr.
+// ---------------------------------------------------------------------------
+
+/// Spawn the binary with `args`, close stdin immediately, and return
+/// `(exited_successfully, stderr)`. Used for startup-path assertions where
+/// the server should never reach the MCP serve loop at all.
+async fn run_until_exit(args: &[&str]) -> (bool, String) {
+    let child = Command::new(framewalk_mcp_binary())
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("spawn framewalk-mcp");
+
+    let output = timeout(TEST_TIMEOUT, child.wait_with_output())
+        .await
+        .expect("framewalk-mcp should exit promptly on a --connect failure")
+        .expect("collect framewalk-mcp output");
+
+    (
+        output.status.success(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+#[tokio::test]
+#[ignore = "spawns real gdb via the mcp binary; run with --ignored"]
+async fn connect_flag_rejects_malformed_spec() {
+    // No colon: nothing separates the transport from its parameters.
+    let (ok, stderr) = run_until_exit(&["--mode", "scheme", "--connect", "remote"]).await;
+
+    assert!(
+        !ok,
+        "malformed --connect should exit non-zero; stderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("--connect"),
+        "stderr should name the offending flag: {stderr}"
+    );
+}
+
+#[tokio::test]
+#[ignore = "spawns real gdb via the mcp binary; run with --ignored"]
+async fn connect_flag_fails_when_target_unreachable() {
+    // Port 1 is privileged and will not have a gdbserver listening, so the
+    // stub connect is refused. framewalk must surface that rather than
+    // serving a session whose target never attached.
+    let (ok, stderr) =
+        run_until_exit(&["--mode", "scheme", "--connect", "remote:localhost:1"]).await;
+
+    assert!(
+        !ok,
+        "unreachable --connect target should exit non-zero; stderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("--connect"),
+        "stderr should name the offending flag: {stderr}"
     );
 }

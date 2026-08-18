@@ -17,10 +17,7 @@ use std::borrow::Cow;
 
 use rmcp::{
     ErrorData as McpError,
-    model::{
-        AnnotateAble, ListResourcesResult, RawResource, ReadResourceResult, Resource,
-        ResourceContents,
-    },
+    model::{ListResourcesResult, ReadResourceResult, Resource, ResourceContents},
 };
 
 use crate::raw_guard::{ALLOWED_MI_REFERENCE_URI, AllowlistMatch, allowed_command_allowlist};
@@ -332,11 +329,10 @@ pub(crate) fn list_resources() -> ListResourcesResult {
         .iter()
         .map(|e| {
             let content = e.content.render();
-            let mut raw = RawResource::new(e.uri, e.name);
-            raw.description = Some(e.description.to_string());
-            raw.mime_type = Some(MIME.to_string());
-            raw.size = Some(u32::try_from(content.len()).unwrap_or(u32::MAX));
-            raw.no_annotation()
+            Resource::new(e.uri, e.name)
+                .with_description(e.description)
+                .with_mime_type(MIME)
+                .with_size(u64::try_from(content.len()).unwrap_or(u64::MAX))
         })
         .collect();
     ListResourcesResult::with_all_items(items)

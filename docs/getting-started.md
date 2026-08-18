@@ -44,14 +44,14 @@ Add to your project's `.mcp.json`:
 }
 ```
 
-Or for scheme-only mode (smaller context window footprint):
+Use `--mode full` when you want the complete per-command tool surface:
 
 ```json
 {
   "mcpServers": {
     "framewalk": {
       "command": "framewalk-mcp",
-      "args": ["--mode", "scheme"]
+      "args": ["--mode", "full"]
     }
   }
 }
@@ -81,12 +81,12 @@ with no special transport configuration.
 
 framewalk-mcp has three operating modes:
 
-| | Full (default) | Core | Scheme |
+| | Scheme (default) | Core | Full |
 |---|---|---|---|
-| **Tools exposed** | 129 (complete MI surface + operator tools + `scheme_eval`) | Curated MI subset + `mi_raw_command` + `scheme_eval` | 5 (`scheme_eval` + operator tools) |
-| **Context cost** | Highest | Medium | Lowest |
-| **Best for** | General-purpose debugging, complete discoverability | Everyday debugging with lower tool-count pressure | Complex multi-step workflows, context-constrained agents |
-| **Flag** | `--mode full` (default) | `--mode core` | `--mode scheme` |
+| **Tools exposed** | 6 (`scheme_eval` + operator tools) | Curated MI subset + `mi_raw_command` + `scheme_eval` | 129 (complete MI surface + operator tools + `scheme_eval`) |
+| **Context cost** | Lowest | Medium | Highest |
+| **Best for** | Complex multi-step workflows, context-constrained agents | Everyday debugging with lower tool-count pressure | General-purpose debugging, complete discoverability |
+| **Flag** | `--mode scheme` (default) | `--mode core` | `--mode full` |
 
 In **full mode**, the LLM can call individual tools like
 `set_breakpoint`, `run`, `backtrace` — one per turn — or use
@@ -99,8 +99,9 @@ initial tool payload.
 
 In **scheme mode**, the LLM writes Steel Scheme code that composes
 multiple GDB operations in a single `scheme_eval` call. The mode still
-keeps `interrupt_target`, `target_state`, `drain_events`, and
-`reconnect_target` available as recovery and observability helpers.
+keeps `interrupt_target`, `target_state`, `drain_events`,
+`target_select`, and `reconnect_target` available as connection,
+recovery, and observability helpers.
 This is ideal when tool definitions would consume too much of the
 context window, or when a workflow requires tight loops (step N times,
 collect data at each stop).
@@ -146,7 +147,10 @@ framewalk-mcp [OPTIONS]
 Options:
     --gdb <PATH>         Path to gdb binary [default: gdb] [env: FRAMEWALK_GDB]
     --cwd <DIR>          Working directory for the GDB child
-    --mode <MODE>        full | core | scheme [default: full] [env: FRAMEWALK_MODE]
+    --mode <MODE>        full | core | scheme [default: scheme] [env: FRAMEWALK_MODE]
+    --connect <TRANSPORT:PARAMS>
+                         Connect to a remote target at startup, e.g.
+                         remote:localhost:1234 [env: FRAMEWALK_CONNECT]
     --non-stop           Enable GDB non-stop mode during bootstrap (default: true)
     --no-non-stop        Disable non-stop mode for all-stop-only remote stubs
     --allow-shell        Allow shell-adjacent MI commands (dangerous)
@@ -161,6 +165,15 @@ Options:
 
 Use `--no-non-stop` (or `FRAMEWALK_NON_STOP=false`) when connecting to
 all-stop-only remote stubs such as QEMU's gdbstub or many JTAG probes.
+You usually do not need it with `--connect`: if the stub rejects
+non-stop, framewalk disables it and retries once on its own, recording a
+`warning:` entry you can read back via `drain_events`.
+
+`--connect` connects before the MCP service starts serving, so the first
+tool call already sees an attached target. It is equivalent to calling
+the `target_select` tool immediately after startup. A failed connect is
+fatal — framewalk shuts GDB down and exits non-zero rather than serving a
+session whose target never attached.
 
 ## Reading these docs from an MCP client
 

@@ -15,7 +15,9 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use clap::Parser;
-use framewalk_mcp::{BackgroundTasks, Config, FramewalkMcp, SchemeHandle, SchemeSettings};
+use framewalk_mcp::{
+    BackgroundTasks, Config, FramewalkMcp, SchemeHandle, SchemeSettings, connect_startup_target,
+};
 use framewalk_mi_transport::{GdbConfig, spawn};
 use rmcp::{ServiceExt, transport::stdio};
 use tracing::info;
@@ -63,6 +65,25 @@ async fn main() -> anyhow::Result<()> {
         .context("failed to spawn gdb subprocess")?;
     let transport = Arc::new(transport);
     let background_tasks = Arc::new(BackgroundTasks::default());
+
+    // Optional startup connect. Done before the MCP service starts serving
+    // so the very first tool call already sees a connected target — and so
+    // `reconnect_target` has a memoised selection to fall back on.
+    if let Some(spec) = &config.connect {
+        if let Err(err) = connect_startup_target(&transport, &background_tasks, spec).await {
+            // Bailing with `?` here would leave the child to `kill_on_drop`.
+            // Run the same ordered shutdown the normal exit path uses so a
+            // failed connect still ends in a graceful `-gdb-exit`.
+            background_tasks.abort_and_wait().await;
+            if let Some(gdb) = Arc::into_inner(transport)
+                && let Err(shutdown_err) = gdb.shutdown().await
+            {
+                tracing::warn!(%shutdown_err, "gdb shutdown errored after failed --connect");
+            }
+            anyhow::bail!("--connect {spec}: {err}");
+        }
+        info!(target_spec = %spec, "connected to remote target during startup");
+    }
 
     let scheme_settings = SchemeSettings {
         eval_timeout: std::time::Duration::from_secs(config.scheme_eval_timeout_secs),

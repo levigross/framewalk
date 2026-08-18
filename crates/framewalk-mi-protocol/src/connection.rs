@@ -306,11 +306,11 @@ impl Connection {
                 // Per the GDB manual: after ^error the target may be in
                 // an unknown state. If the command was an execution
                 // command, reset TargetState and invalidate frames.
-                if let Some(info) = pending_info.as_ref() {
-                    if info.is_exec_command() {
-                        self.target.mark_unknown();
-                        self.frames.clear();
-                    }
+                if let Some(info) = pending_info.as_ref()
+                    && info.is_exec_command()
+                {
+                    self.target.mark_unknown();
+                    self.frames.clear();
                 }
             }
             ResultClass::Running | ResultClass::Exit => {

@@ -69,6 +69,23 @@
 (define (detach)
   (mi-cmd "target-detach"))
 
+;; Remote targets.  `where` is the transport argument, e.g. "localhost:1234"
+;; or "/dev/ttyUSB0".  `target-remote` is a one-shot connection bound to the
+;; single target the stub was launched against; `target-extended-remote`
+;; leaves the stub alive after detach so you can `(attach pid)` to further
+;; processes on the same host.
+;;
+;; These go through `-target-select`, so a successful connect is memoised
+;; and the `reconnect_target` tool can re-establish it after a stub restart.
+(define (target-remote where)
+  (mi-cmd "target-select" "remote" where))
+
+(define (target-extended-remote where)
+  (mi-cmd "target-select" "extended-remote" where))
+
+(define (target-disconnect)
+  (mi-cmd "target-disconnect"))
+
 ;; ----------------------------------------------------------------
 ;; Execution control
 ;; ----------------------------------------------------------------

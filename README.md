@@ -62,7 +62,7 @@ regular flake without importing any modules:
 ```nix
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     framewalk.url = "github:levigross/framewalk";
   };
 
@@ -92,7 +92,7 @@ enable it per system, and use the exposed package handles:
 ```nix
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     flake-parts.url = "github:hercules-ci/flake-parts";
     framewalk.url = "github:levigross/framewalk";
   };
@@ -148,31 +148,40 @@ Compile a program with debug info and ask your agent:
 > Load `/tmp/my_program`, set a breakpoint at `process_request`, run
 > it, and show me the local variables when it stops.
 
-The agent calls `load_file`, `set_breakpoint`, `run`, and
-`list_locals` — each returning structured GDB/MI results.
+The default Scheme mode lets the agent make one `scheme_eval` call that
+loads the file, sets the breakpoint, runs to it, and returns locals.
 
 ## Modes
 
 framewalk-mcp has three operating modes that control the trade-off
 between tool granularity and context window cost.
 
-### Full mode (default)
+### Scheme mode (default)
 
 ```sh
 framewalk-mcp
-framewalk-mcp --mode full
+framewalk-mcp --mode scheme
 ```
 
-Exposes **129 tools** covering the full GDB/MI surface plus
-`scheme_eval`: session
-management, execution control (including reverse debugging),
-breakpoints, watchpoints, catchpoints, stack inspection, thread
-management, variable objects, memory and register access, disassembly,
-symbol queries, tracepoints, remote target operations, and the
-`scheme_eval` scripting tool.
+Exposes **6 tools**: `scheme_eval` plus `interrupt_target`,
+`target_state`, `drain_events`, `target_select`, and `reconnect_target`.
+The agent writes
+[Steel Scheme](https://github.com/mattwparas/steel) code that composes
+multiple GDB operations in a single call:
 
-Each tool maps to one GDB/MI operation with typed parameters. The
-agent calls them individually, one per turn.
+```scheme
+(begin
+  (load-file "/tmp/binary")
+  (set-breakpoint "main")
+  (run)
+  (wait-for-stop)
+  (step-n 5)
+  (backtrace))
+```
+
+Tool definitions drop from ~12k tokens to ~500. The engine state
+persists across calls, so the agent can build up helper functions over
+a session.
 
 ### Core mode
 
@@ -186,34 +195,19 @@ same debugger model as full mode, but trims lower-frequency operations
 from the advertised tool list so clients spend less context budget on
 the long tail.
 
-### Scheme mode
+### Full mode
 
 ```sh
-framewalk-mcp --mode scheme
+framewalk-mcp --mode full
 ```
 
-Exposes **5 tools**: `scheme_eval` plus `interrupt_target`,
-`target_state`, `drain_events`, and `reconnect_target`. The agent writes
-[Steel Scheme](https://github.com/mattwparas/steel) code that
-composes multiple GDB operations in a single call:
-
-```scheme
-(begin
-  (load-file "/tmp/binary")
-  (set-breakpoint "main")
-  (run)
-  (wait-for-stop)
-  (step-n 5)
-  (backtrace))
-```
-
-Tool definitions drop from ~12k tokens to ~500. The engine state
-persists across calls, so the agent can build up helper functions
-over a session.
-
-Choose scheme mode when context window space is tight, or when the
-task involves loops, conditionals, or data collection across many
-stops.
+Exposes **129 tools** covering the full GDB/MI surface plus
+`scheme_eval`: session management, execution control (including reverse
+debugging), breakpoints, watchpoints, catchpoints, stack inspection,
+thread management, variable objects, memory and register access,
+disassembly, symbol queries, tracepoints, remote target operations, and
+the `scheme_eval` scripting tool. Each tool maps to one GDB/MI
+operation with typed parameters, and the agent calls them individually.
 
 ## Live resources
 
@@ -455,7 +449,8 @@ details, and deployment recommendations.
 |---|---|---|---|
 | `--gdb` | `FRAMEWALK_GDB` | `gdb` | Path to GDB binary |
 | `--cwd` | | server's cwd | Working directory for GDB |
-| `--mode` | `FRAMEWALK_MODE` | `full` | `full`, `core`, or `scheme` (`standard` is accepted as an alias for `full`) |
+| `--mode` | `FRAMEWALK_MODE` | `scheme` | `full`, `core`, or `scheme` (`standard` is accepted as an alias for `full`) |
+| `--connect` | `FRAMEWALK_CONNECT` | | Connect to a remote target at startup: `<transport>:<parameters>`, e.g. `remote:localhost:1234`. Fatal if the connect fails |
 | `--non-stop` / `--no-non-stop` | `FRAMEWALK_NON_STOP` | `true` | Enable GDB non-stop mode; disable it for all-stop-only remote stubs such as QEMU's gdbstub |
 | `--allow-shell` | `FRAMEWALK_ALLOW_SHELL` | `false` | Permit shell-adjacent MI commands |
 | `--log` | `FRAMEWALK_LOG` | `framewalk=info,rmcp=warn` | Tracing filter |

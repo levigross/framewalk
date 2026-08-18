@@ -87,10 +87,28 @@ patched into its text section until it next reloads the page.
 For debugging across a network or into a container, `target_select`
 points framewalk at a gdbserver instance the remote host is running.
 
+`target_select` takes two separate arguments: `transport` names the
+connection type and `parameters` carries its argument.
+
 ```json
-{"name": "target_select", "arguments": {"target": "remote:host.example:9999"}}
-{"name": "target_select", "arguments": {"target": "extended-remote:host.example:9999"}}
+{"name": "target_select", "arguments": {"transport": "remote", "parameters": "host.example:9999"}}
+{"name": "target_select", "arguments": {"transport": "extended-remote", "parameters": "host.example:9999"}}
 ```
+
+`target_select` is an operator tool, so it is advertised in every mode —
+`full`, `core`, and `scheme`. In `scheme` mode you can also connect from
+inside `scheme_eval`:
+
+```scheme
+(target-remote "host.example:9999")
+(target-extended-remote "host.example:9999")
+(target-disconnect)
+```
+
+To connect before the first tool call, start the server with
+`--connect remote:host.example:9999`; the flag applies the same non-stop
+downgrade retry as the tool and makes `reconnect_target` usable
+immediately.
 
 `remote` is a one-shot connection: the gdbserver session is bound to
 the one target it was launched against. `extended-remote` keeps the

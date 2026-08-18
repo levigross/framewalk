@@ -35,7 +35,7 @@ Everything else:
 
 **Always run Rust/cargo commands through `nix develop -c`.** The flake pins the exact toolchain, targets (including `x86_64-unknown-linux-musl`), and `gdb`. Using the ambient toolchain silently diverges from CI.
 
-Rust edition 2024, MSRV 1.85, resolver v3. Apache-2.0 licensed.
+Rust edition 2024, MSRV 1.88, resolver v3. Apache-2.0 licensed.
 
 Core commands:
 

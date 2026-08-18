@@ -390,13 +390,12 @@ fn rejects_mixed_list() {
 fn parses_deeply_nested_list() {
     let r = parse("^done,x=[[[\"innermost\"]]]");
     if let Record::Result(rr) = r {
-        if let Value::List(ListValue::Values(l1)) = &rr.results[0].1 {
-            if let Value::List(ListValue::Values(l2)) = &l1[0] {
-                if let Value::List(ListValue::Values(l3)) = &l2[0] {
-                    assert_eq!(l3[0], c("innermost"));
-                    return;
-                }
-            }
+        if let Value::List(ListValue::Values(l1)) = &rr.results[0].1
+            && let Value::List(ListValue::Values(l2)) = &l1[0]
+            && let Value::List(ListValue::Values(l3)) = &l2[0]
+        {
+            assert_eq!(l3[0], c("innermost"));
+            return;
         }
         panic!("shape mismatch");
     }
